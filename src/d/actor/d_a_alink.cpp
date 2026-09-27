@@ -20438,7 +20438,8 @@ int daAlink_c::draw() {
         shadowDraw();
     }
 
-    if (m_swordBlur.field_0x14 > 0) {
+    // VR: skip the sword-swing blur trail (ghosting) in the headset.
+    if (m_swordBlur.field_0x14 > 0 && !dusk::vr::isRenderingToHeadset()) {
         dComIfGd_entryZSortXluList(&m_swordBlur, m_swordBlur.field_0x308[0]);
     }
 
