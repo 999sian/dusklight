@@ -13294,13 +13294,29 @@ void daAlink_c::posMove() {
         mNormalSpeed = 0.0f;
     }
 
-    speedF = mNormalSpeed * (1.0f - fabsf(mSpeedModifier));
-
-    f32 mod = field_0x33a0 * (1.0f - field_0x2060->getOldFrameRate()) * mSpeedModifier;
-    if (speedF < 0.0f) {
-        speedF -= mod;
+    // VR first person (2026-09-28): skip the footstep-sync blend below and
+    // move at the plain mNormalSpeed ramp. mSpeedModifier crossfades speedF
+    // toward the planted foot's animated displacement (field_0x33a0) during
+    // walk<->run start/stop transitions, so per-tick movement pulsed with
+    // each footfall (captured on Quest: 0.9, 2.7, 4.7, 1.2, 3.5, 6.7... on a
+    // start; 7.4, 13.9, 4.6, 0.3 on a stop) -- invisible flatscreen, but with
+    // the VR camera anchored to current.pos it's felt as a lurch. The
+    // mNormalSpeed ramp itself is smooth (+1.9/tick up, -2.2/tick down).
+    // Feet may slide slightly during those transitions; the body is hidden
+    // in VR first person by default.
+    const bool vrSmoothSpeed = dusk::vr::isRenderingToHeadset() &&
+        (dusk::vr::isVrFirstPerson(this) || dusk::vr::isWolfFirstPersonView(this));
+    if (vrSmoothSpeed) {
+        speedF = mNormalSpeed;
     } else {
-        speedF += mod;
+        speedF = mNormalSpeed * (1.0f - fabsf(mSpeedModifier));
+
+        f32 mod = field_0x33a0 * (1.0f - field_0x2060->getOldFrameRate()) * mSpeedModifier;
+        if (speedF < 0.0f) {
+            speedF -= mod;
+        } else {
+            speedF += mod;
+        }
     }
 
     if (getZoraSwim() && !checkZoraWearAbility()) {
