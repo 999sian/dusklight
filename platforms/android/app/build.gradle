@@ -28,6 +28,12 @@ ext.borealisAndroid = [
 
 apply from: new File(borealisDir, 'platforms/android/gradle/borealis-application.gradle')
 
+// Local dev builds install alongside the SideQuest/GitHub release instead of
+// clashing with its signing key (which would force an uninstall and wipe its
+// saves). Manifest authorities use ${applicationId}, so they follow along.
+android.buildTypes.debug.applicationIdSuffix = '.dev'
+android.buildTypes.debug.versionNameSuffix = '-dev'
+
 // Upstream 2.0 replaced the old shell-script JNI staging (stage-jni-
 // libs.sh) with borealis-application.gradle's own stageBorealisJniLibs
 // task above, which only knows about libmain.so/libc++_shared.so --

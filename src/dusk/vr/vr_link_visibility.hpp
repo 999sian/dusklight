@@ -3047,7 +3047,7 @@ inline bool s_wolfHeadPosCalibrated = false;
 // UPDATED 2026-09-14, same-day follow-up (explicit user request: "sit back
 // 12 inches higher and 12 inches backwards"): +12 real inches on top of
 // the original 120-unit guess above, same 2.54-units/inch conversion as
-// kCoreAnchorExtraForwardUnits/kHorseCameraUpUnits (100 units/metre).
+// kHorseCameraUpUnits (100 units/metre).
 inline constexpr float kWolfCameraHeightUnits = 120.0f + 30.48f;
 
 // Backward nudge along Wolf Link's own facing direction (current.angle.y),
@@ -3297,20 +3297,16 @@ inline bool s_coreAnchorLastTickPosValid = false;
 inline uint64_t s_coreAnchorLastTickPosSimTick = 0;
 inline constexpr float kCoreAnchorTeleportDistanceUnits = 300.0f;  // ~3m/tick
 
-// ADDED 2026-08-09 (user report, after testing the core-anchor change
-// in-headset: "Link hunches forward when hes running and you can see your
-// neck and back in the way"). A fixed nudge applied ON TOP of the
-// calibrated core anchor above -- up and forward -- to clear the camera of
-// his own hunched neck/shoulder/back geometry during fast movement. 100
-// game units = 1 real metre (VR_SCALE_FACTOR above / vr_stereo_render.hpp's
-// kEyePosScale, same established conversion used for hand tracking) -> 1in
-// = 2.54 units.
-//
-// TUNED same day: original 6in-up guess was too much ("6 was too much my
-// bad") -- brought down to 3in up (7.62 units). Forward left at 6in per no
-// contrary feedback.
-inline constexpr float kCoreAnchorExtraUpUnits = 7.62f;      // 3 real inches
-inline constexpr float kCoreAnchorExtraForwardUnits = 15.24f; // 6 real inches
+// REMOVED 2026-09-28: kCoreAnchorExtraUpUnits (3in) / kCoreAnchorExtraForwardUnits
+// (6in), a nudge added 2026-08-09 to clear the camera of Link's hunched
+// neck/back while running. The forward part was applied along Link's BODY
+// facing (current.angle.y) and scaled by stick-vs-facing alignment, so it
+// swung the camera in an arc whenever Link turned and popped it forward/back
+// within one tick whenever the stick was pressed or released -- camera
+// motion driven by Link's rotation/animation state rather than his position,
+// which was reported as uncomfortable. Target setup is Show Body off
+// (vrShowBody, the default), so there's no body geometry to clear and the
+// anchor is now plain current.pos + calibrated eye height.
 
 // Shared by getVrCameraEyeAnchor() and getVrBodyPositionOffset() so both
 // agree on exactly the same definition of "the raw, this-instant,
@@ -3396,6 +3392,39 @@ inline bool isUprightStandingProc(const daAlink_c* link) {
     }
 }
 
+// ADDED 2026-09-28: physics-position anchor for the stances the standing
+// calibration doesn't cover (swimming, vine climbing, crawling, heavy-boots
+// underwater walking, dialogue). These used to return the animated head
+// joint (getSubjectEyePos()) directly, so every swim stroke, crawl shuffle
+// and talk animation moved the camera. Now: x/z come straight from
+// current.pos, and only the HEIGHT above current.pos is taken from the head
+// joint -- low-pass filtered once per sim tick, so a stance change (standing
+// -> crawl, surface -> dive) still eases the eye to the right height, but
+// per-stroke/per-step bob is filtered out. kStanceHeightFilterAlpha is the
+// per-tick blend factor: 0.1 at 30 ticks/s is a ~0.3s time constant; lower =
+// calmer but slower to settle after a stance change.
+inline constexpr float kStanceHeightFilterAlpha = 0.1f;
+inline float s_stanceHeight = 0.0f;
+inline bool s_stanceHeightFilterValid = false;
+inline uint64_t s_stanceHeightLastSimTick = 0;
+
+inline cXyz computeRawStanceAnchoredEye(daAlink_c* link) {
+    const float sample = link->getSubjectEyePos()->y - link->current.pos.y;
+    const uint64_t simTick = dusk::interp::sim_tick_seq();
+    if (!s_stanceHeightFilterValid) {
+        // Seed from the height the camera was already using (the standing
+        // calibration), so entering one of these states glides from the
+        // current eye height instead of jumping to the animated head.
+        s_stanceHeight = s_coreAnchorHeightOffset;
+        s_stanceHeightFilterValid = true;
+        s_stanceHeightLastSimTick = simTick;
+    } else if (simTick != s_stanceHeightLastSimTick) {
+        s_stanceHeight += (sample - s_stanceHeight) * kStanceHeightFilterAlpha;
+        s_stanceHeightLastSimTick = simTick;
+    }
+    return cXyz{link->current.pos.x, link->current.pos.y + s_stanceHeight, link->current.pos.z};
+}
+
 inline cXyz computeRawCoreAnchoredEye(daAlink_c* link) {
     const cXyz realEye = *link->getSubjectEyePos();
 
@@ -3450,59 +3479,13 @@ inline cXyz computeRawCoreAnchoredEye(daAlink_c* link) {
         }
     }
 
-    // Forward offset direction comes from Link's actual BODY-facing yaw
-    // (current.angle.y -- the same field/convention d_a_alink.cpp itself
-    // already uses for forward-offset placement, e.g. `current.pos.x +
-    // N*cM_ssin(current.angle.y)` / `current.pos.z + N*cM_scos(current.angle.y)`
-    // elsewhere in that file), NOT the HMD/smooth-turn yaw -- deliberately,
-    // since the geometry being cleared (his hunched neck/back) is fixed
-    // relative to his BODY, not to wherever the player happens to be
-    // looking. current.angle.y is a signed 16-bit BAMS angle (SSystem's
-    // csXyz/SVec convention, full circle = 65536) with 0 facing +Z and
-    // positive rotating toward +X, matching that same existing call site;
-    // converted to radians here (rather than pulling in this codebase's
-    // separate cM_ssin/cM_scos fixed-angle trig helpers, unused elsewhere
-    // in this file) since std::sin/std::cos are already this file's own
-    // established convention for yaw math (see rotateYawXr() above).
-    const float yawRad = static_cast<float>(link->current.angle.y) * (3.14159265f / 32768.0f);
-
-    // Direction-aware scaling (2026-09-11, user report/hypothesis:
-    // "Link's body lags behind when Z targeting" + "there might be
-    // compensation... that brings him forward... when going back it
-    // would compensate in the wrong direction"). The nudge above was
-    // tuned specifically while running FORWARD -- unconditionally
-    // applying it in Link's FACING direction regardless of which way
-    // he's actually moving means it stays fully applied while strafing
-    // or backing away from a Z-target (his facing locks onto the target,
-    // independent of any VR setting -- native base-game behavior) or
-    // walking backward -- there's no forward hunch to clear in those
-    // cases, so the fixed push just reads as a positional mismatch.
-    // Scale by how much of the actual movement (mMoveAngle -- the same
-    // stick-relative-to-facing comparison the base game's own
-    // getDirectionFromCurrentAngle() already makes, d_a_alink.h) lines up
-    // with facing: full nudge moving straight forward (unchanged from
-    // the already-confirmed-correct running case), smoothly down to zero
-    // moving sideways, clamped at zero rather than going negative for
-    // backward movement (no reason to push the OTHER way -- there's
-    // nothing to compensate for if he's not leaning forward). Left at
-    // full strength while the stick is idle (checkInputOnR() false,
-    // matching setSpeedAndAngleNormal()'s own "is the stick actively
-    // held" check) -- standing still was never reported wrong, so that
-    // case is deliberately left exactly as before.
-    float forwardAlignment = 1.0f;
-    if (link->checkInputOnR()) {
-        const s16 moveFacingDeltaS = static_cast<s16>(link->mMoveAngle - link->current.angle.y);
-        const float moveFacingDeltaRad =
-            static_cast<float>(moveFacingDeltaS) * (3.14159265f / 32768.0f);
-        forwardAlignment = std::max(0.f, std::cos(moveFacingDeltaRad));
-    }
-
-    cXyz eye{link->current.pos.x, link->current.pos.y + s_coreAnchorHeightOffset,
-             link->current.pos.z};
-    eye.y += kCoreAnchorExtraUpUnits;
-    eye.x += kCoreAnchorExtraForwardUnits * forwardAlignment * std::sin(yawRad);
-    eye.z += kCoreAnchorExtraForwardUnits * forwardAlignment * std::cos(yawRad);
-    return eye;
+    // Position only -- nothing here depends on Link's facing, stick input,
+    // or animation state (see the REMOVED note above trackCoreAnchorPosition()
+    // for the facing-relative nudge that used to be added here). Re-arms the
+    // stance filter so the next non-standing stance seeds from this height.
+    s_stanceHeightFilterValid = false;
+    return cXyz{link->current.pos.x, link->current.pos.y + s_coreAnchorHeightOffset,
+                link->current.pos.z};
 }
 
 // FIXED 2026-08-09 (user request: "in gameplay link's head is on his core
@@ -3623,13 +3606,12 @@ inline cXyz computeRawCoreAnchoredEye(daAlink_c* link) {
 // sits far enough forward (and, per a same-day follow-up report, too low)
 // to clip through Epona's own head/neck geometry. Pulls the anchor BACK
 // along Link's body-facing direction (current.angle.y, the same field/
-// convention computeRawCoreAnchoredEye() already uses for its own
-// forward-offset nudge, just negated here) and UP, both by fixed
-// real-world distances. Scoped to horse riding only (checkReinRide()) --
+// convention d_a_alink.cpp uses for forward-offset placement) and UP,
+// both by fixed real-world distances. Scoped to horse riding only (checkReinRide()) --
 // canoe/board weren't reported and use their own separate offsets
 // (canoeLocalEyeFromRoot/boardLocalEyeFromRoot); don't assume they have
 // the same problem without separate confirmation.
-inline constexpr float kHorseCameraBackUnits = 30.48f;  // 1 real foot (100 units/metre, see kCoreAnchorExtraForwardUnits's own comment)
+inline constexpr float kHorseCameraBackUnits = 30.48f;  // 1 real foot (100 units/metre, VR_SCALE_FACTOR)
 inline constexpr float kHorseCameraUpUnits = 15.24f;    // 6 real inches, same conversion
 
 inline cXyz computeRawEyeAnchor(daAlink_c* link) {
@@ -3642,21 +3624,39 @@ inline cXyz computeRawEyeAnchor(daAlink_c* link) {
         eye.y += kHorseCameraUpUnits;
         return eye;
     }
-    if (link->checkModeFlg(daAlink_c::MODE_SWIMMING | daAlink_c::MODE_VINE_CLIMB) ||
-        isCrawling(link) || isHookshotAirborneOrHanging(link) || isMagnetized(link) ||
-        link->checkWaterInMove() || link->checkCanoeRide() || link->checkBoardRide())
+    // Hookshot flight/hang, ceiling/wall magnet walking and canoe/board
+    // rides stay on the animated head joint: Link isn't upright relative to
+    // world-up there (or rides a vehicle whose own motion is the point), so
+    // "current.pos + height" has no meaningful up axis to apply.
+    if (isHookshotAirborneOrHanging(link) || isMagnetized(link) ||
+        link->checkCanoeRide() || link->checkBoardRide())
     {
         trackCoreAnchorPosition(link, /*allowRecalibration=*/false);
         return *link->getSubjectEyePos();
+    }
+    // Swimming, vines, crawling, heavy-boots underwater walking: physics
+    // position + filtered stance height (computeRawStanceAnchoredEye()).
+    if (link->checkModeFlg(daAlink_c::MODE_SWIMMING | daAlink_c::MODE_VINE_CLIMB) ||
+        isCrawling(link) || link->checkWaterInMove())
+    {
+        trackCoreAnchorPosition(link, /*allowRecalibration=*/false);
+        return computeRawStanceAnchoredEye(link);
     }
     if (!link->checkEventRun()) {
         // Ordinary gameplay -- root/core-anchored, section 23.
         return computeRawCoreAnchoredEye(link);
     }
-    // Cutscene or dialogue -- the original, pre-section-23 head-joint
-    // anchor. No core-anchor height calibration or hunch-clearance nudge
-    // here: both exist specifically to compensate for the core anchor and
-    // for running/movement, neither of which applies to this branch.
+    // Plain dialogue: Link is just standing there, so use the physics
+    // anchor too rather than following his talk animations. Like the rest
+    // of the event branch this deliberately doesn't feed
+    // trackCoreAnchorPosition() (see its comment -- loads/warps wrapped in
+    // an event must still read as a teleport on the way back out).
+    dEvt_control_c* event = dComIfGp_getEvent();
+    if (event && event->getMode() == dEvt_mode_TALK_e) {
+        return computeRawStanceAnchoredEye(link);
+    }
+    // Cutscene -- the original, pre-section-23 head-joint anchor, which
+    // follows the authored animation/eyeline the scene is built around.
     return *link->getSubjectEyePos();
 }
 
@@ -3721,7 +3721,17 @@ inline cXyz computeRawEyeAnchor(daAlink_c* link) {
 // the one thing the user actually reported (VR hands/view lag), not a
 // blanket engine-wide behavior change with much wider (and untested)
 // blast radius.
-inline constexpr float kEyeAnchorExtrapolationGain = 1.0f;
+//
+// CHANGED 2026-09-28: 1.0 -> 0.0 (back to pure interpolation). The
+// "known, accepted tradeoff" above is what was reported as uncomfortable:
+// every start/stop/sharp turn overshot by up to one tick of Link's movement
+// and then snapped back, and during steady movement the camera sat a full
+// tick AHEAD of the world, which (per the header comment above) is itself
+// rendered one tick behind real time via dusk::frame_interp. At 0.0 the
+// eye is lerp(prev, curr, step) -- in lockstep with the interpolated world
+// and never outside the two confirmed samples. Head ROTATION still comes
+// straight from the headset every frame; only the anchor position trails.
+inline constexpr float kEyeAnchorExtrapolationGain = 0.0f;
 }  // namespace detail
 
 // World-space position the VR camera should be anchored to for this frame.
@@ -3775,6 +3785,7 @@ inline cXyz getVrCameraEyeAnchor(const cXyz& fallbackEye,
         detail::s_coreAnchorCalibrationAttempts = 0;
         detail::s_coreAnchorConsecutivePlausible = 0;
         detail::s_coreAnchorLastTickPosValid = false;
+        detail::s_stanceHeightFilterValid = false;
         // Camera-only 6DOF (see detail::s_headPosCalibrated's own comment):
         // recalibrate the real-head-position reference on the NEXT
         // activation too, same reasoning as the core anchor's own height
