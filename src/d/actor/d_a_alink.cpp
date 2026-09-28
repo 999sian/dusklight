@@ -12667,6 +12667,22 @@ int daAlink_c::checkNextAction(int param_0) {
     } else {
         field_0x2f98 = 4;
 
+        // VR first person (2026-09-28): starting from a standstill, face the
+        // push direction (mMoveAngle = stick + headset yaw) immediately. The
+        // base game instead pivots in place (PROC_WAIT_TURN, >168 deg) or
+        // starts off along the old facing and eases ~20% of the remaining
+        // angle per tick, so after looking around while standing the first
+        // few steps curved or paused -- reads as steering a body that isn't
+        // yours. In VR the player's head IS Link's facing. Ground-only; the
+        // ride/swim/vine/magnet states keep their own facing rules.
+        if (checkZeroSpeedF() && checkInputOnR() && dusk::vr::isRenderingToHeadset() &&
+            dusk::vr::isVrFirstPerson(this) && !checkEventRun() && !checkMagneBootsOn() &&
+            !checkModeFlg(MODE_SWIMMING | MODE_VINE_CLIMB | MODE_RIDING))
+        {
+            current.angle.y = mMoveAngle;
+            shape_angle.y = mMoveAngle;
+        }
+
         if (checkZeroSpeedF()) {
             if (cLib_distanceAngleS(mMoveAngle, current.angle.y) > 0x7800 && checkInputOnR()) {
                 ret = procWaitTurnInit();
