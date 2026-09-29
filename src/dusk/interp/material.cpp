@@ -13,6 +13,7 @@
 #include "JSystem/J3DGraphBase/J3DMaterial.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <memory>
 #include <tuple>
@@ -553,12 +554,35 @@ std::vector<std::weak_ptr<Recording>>& live_recordings() {
     return stored;
 }
 
+bool s_deferModelReplay = false;
+ReplayStats s_replayStats;
+
 void replay_recording(Recording& recording) {
-    ModelScope scope(recording.bindings);
-    recording.model->calcMaterial();
-    recording.model->diff();
+    const auto start = std::chrono::steady_clock::now();
+    {
+        ModelScope scope(recording.bindings);
+        recording.model->calcMaterial();
+        recording.model->diff();
+    }
+    s_replayStats.ms +=
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+    ++s_replayStats.models;
 }
 }  // namespace
+
+void set_defer_model_replay(bool defer) {
+    s_deferModelReplay = defer;
+}
+
+bool is_model_replay_deferred() {
+    return s_deferModelReplay;
+}
+
+ReplayStats take_replay_stats() {
+    const ReplayStats stats = s_replayStats;
+    s_replayStats = {};
+    return stats;
+}
 
 void record_model(J3DModel* model) {
     if (!should_capture() || is_presentation_active()) {
@@ -577,11 +601,15 @@ void record_model(J3DModel* model) {
     live.push_back(recording);
 
     add_interpolation_callback([](void* work) {
+        if (s_deferModelReplay) {
+            return;  // replayed per view instead -- see set_defer_model_replay()
+        }
         replay_recording(*static_cast<Recording*>(work));
     }, recording.get(), recording);
 }
 
 void replay_models_for_current_view() {
+    ++s_replayStats.passes;
     for (const auto& weak : live_recordings()) {
         if (auto recording = weak.lock()) {
             replay_recording(*recording);

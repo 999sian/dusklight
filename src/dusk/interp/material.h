@@ -96,6 +96,22 @@ void record_model(J3DModel* model);
 // flatscreen camera -- lighting that swings as the head turns or Link moves.
 void replay_models_for_current_view();
 
+// While set, the once-per-frame replay in begin_presentation() skips model
+// recordings. m_Do_main.cpp sets it when VR rendered last frame (the eye
+// passes replay per view instead), and replays for the flatscreen view
+// itself if VR then doesn't render this frame -- so each frame replays
+// exactly once per view actually drawn.
+void set_defer_model_replay(bool defer);
+bool is_model_replay_deferred();
+
+// Accumulated model-replay cost since the last call (performance logging).
+struct ReplayStats {
+    double ms = 0.0;  // total time in calcMaterial/diff replays
+    int models = 0;   // model replays run
+    int passes = 0;   // replay_models_for_current_view() calls
+};
+ReplayStats take_replay_stats();
+
 void set_view_projection(J3DTexMtxInfo* info, f32 scaleS, f32 scaleT, f32 transS, f32 transT);
 void record_light_view(J3DMaterial* material);
 

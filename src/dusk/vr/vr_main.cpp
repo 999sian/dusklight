@@ -3279,6 +3279,31 @@ void submitFrame() {
         duskVrLog("[dusk::vr::submitFrame] FAILED: xrEndFrame\n");
     }
 
+    // Model-replay cost (dusk::interp::material::replay_models_for_current_view,
+    // the per-view lighting re-aim): averaged per frame, logged every ~2s.
+    {
+        static int s_replayFrames = 0;
+        static double s_replayMs = 0.0, s_replayMaxMs = 0.0;
+        static int s_replayModels = 0, s_replayPasses = 0;
+        const auto stats = dusk::interp::material::take_replay_stats();
+        ++s_replayFrames;
+        s_replayMs += stats.ms;
+        s_replayMaxMs = std::max(s_replayMaxMs, stats.ms);
+        s_replayModels += stats.models;
+        s_replayPasses += stats.passes;
+        if (s_replayFrames >= 144) {
+            char msg[200];
+            duskVrSnprintf(msg, sizeof(msg),
+                "[dusk::vr::replayperf] frames=%d avgMs=%.3f maxMs=%.3f "
+                "modelsPerFrame=%.1f passesPerFrame=%.2f\n",
+                s_replayFrames, s_replayMs / s_replayFrames, s_replayMaxMs,
+                double(s_replayModels) / s_replayFrames, double(s_replayPasses) / s_replayFrames);
+            duskVrLog(msg);
+            s_replayFrames = s_replayModels = s_replayPasses = 0;
+            s_replayMs = s_replayMaxMs = 0.0;
+        }
+    }
+
     // TEMP DIAGNOSTIC -- see the comment block above tick(). Log on a dip,
     // plus a periodic baseline. Cull counters are read+reset here too.
     {

@@ -559,6 +559,11 @@ struct UserSettings {
         ConfigVar<bool> vrSmoothStartStop;
         ConfigVar<bool> vrInstantStartFacing;
         ConfigVar<VrLightingMode> vrLightingMode;
+        // Base game's sun-glare darkening (d_kankyo_rain.cpp): dims the whole
+        // scene by how centred and unoccluded the sun is in the FLATSCREEN
+        // camera's view. Default off in VR -- it tracks an invisible camera
+        // and pumps scene brightness when walking in/out of cover.
+        ConfigVar<bool> vrSunGlareDimming;
 
         // Audio
         ConfigVar<bool> noLowHpSound;

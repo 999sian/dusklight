@@ -1032,6 +1032,16 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     "<br/><b>Follow Look:</b> from above and behind where you're looking, "
                     "following your head with about a one-second delay.");
             });
+        config_bool_select(leftPane, rightPane, getSettings().game.vrSunGlareDimming,
+            {
+                .key = "Sun Glare Dimming",
+                .helpText = "The original game darkens the whole scene when the sun is near "
+                            "the middle of the view and not blocked, imitating your eyes "
+                            "adjusting to glare. In VR it's based on an invisible camera rather "
+                            "than where you're looking, so walking under a tree or roof makes "
+                            "everything brighten and dim. The lens flare is unaffected. Off by "
+                            "default."
+            });
 
         leftPane.add_section("Turning");
         config_bool_select(leftPane, rightPane, getSettings().game.vrSnapTurn,

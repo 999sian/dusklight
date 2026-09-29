@@ -87,6 +87,8 @@ static RENDERDOC_API_1_1_2* getRenderDocApi() {
 #include "dusk/imgui/ImGuiConsole.hpp"
 #include "dusk/imgui/ImGuiEngine.hpp"
 #include "dusk/interp/frame_interpolation.h"
+#include "dusk/interp/material.h"
+#include "JSystem/J3DGraphBase/J3DSys.h"
 #include "dusk/iso_validate.hpp"
 #include "dusk/logging.h"
 #include "dusk/main.h"
@@ -411,6 +413,11 @@ void main01(void) {
             }
 
             const float step = timing.interpolating ? dusk::game_clock::sample_interpolation_step() : 1.0f;
+            // VR draws replayed models per eye/stereo pass; skip the
+            // flatscreen replay when it did last frame (see
+            // dusk::interp::material::set_defer_model_replay()).
+            dusk::interp::material::set_defer_model_replay(dusk::vr::isActive() &&
+                                                           dusk::vr::isRenderingToHeadset());
             dusk::interp::begin_presentation(step);
             // FIXED (v10): isActive() alone used to gate this, which blanked
             // the flatscreen (menus, video, loading screens included) for the
@@ -441,6 +448,14 @@ void main01(void) {
             // this was active). Back to skipping the flatscreen draw
             // whenever tick() actually rendered stereo eyes.
             if (!dusk::vr::isActive() || !dusk::vr::isRenderingToHeadset()) {
+                if (dusk::interp::material::is_model_replay_deferred()) {
+                    // VR expected to draw but didn't: replay for the
+                    // flatscreen view after all.
+                    if (view_class* view = dComIfGd_getView()) {
+                        j3dSys.setViewMtx(view->viewMtx);
+                        dusk::interp::material::replay_models_for_current_view();
+                    }
+                }
                 fpcM_DrawIterater((fpcM_DrawIteraterFunc)fpcM_Draw);
                 cAPIGph_Painter();
             }
