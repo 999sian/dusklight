@@ -343,6 +343,12 @@ s16 getHeadMoveAngleS();
 // Plain floats rather than cXyz, same header-layering reason as above.
 bool getVrLightingCamera(float outEye[3], float outCenter[3]);
 
+// World-space VR camera eye (the headset's anchor this frame), for things
+// the base game centres on the camera eye -- sky dome, cloud layer, sun
+// sprite (2026-09-29). Unlike getVrLightingCamera() this ignores the
+// lighting mode. Returns false outside VR rendering.
+bool getVrViewEye(float outEye[3]);
+
 // Physical sword (game.vrPhysicalSword): true while the sword hand is moving
 // fast enough to count as a swing (same speed the swing gesture fires at).
 bool isPhysicalSwordSwingActive();

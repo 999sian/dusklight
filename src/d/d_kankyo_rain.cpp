@@ -157,18 +157,29 @@ static GXTexObj* load_cached_tex(CachedTexObjs<N>& cache, ResTIMG* img, GXTexMap
 #endif
 
 #if TARGET_PC
+// VR (2026-09-29): the sun sprite is placed 8000 units from the camera eye;
+// in VR that must be the headset's eye, not the flatscreen chase camera
+// (a few hundred units away), or the sun swings as that camera orbits Link.
+static cXyz dKyr_sky_eye(camera_class* camera) {
+    f32 eye[3];
+    if (dusk::vr::getVrViewEye(eye)) {
+        return cXyz(eye[0], eye[1], eye[2]);
+    }
+    return camera->view.lookat.eye;
+}
+
 static void dKyr_place_sun(camera_class* camera, cXyz* o_sunpos) {
     cXyz lightDir;
+    cXyz eye = dKyr_sky_eye(camera);
     u32 stage_type = dStage_stagInfo_GetSTType(dComIfGp_getStage()->getStagInfo());
     if (g_env_light.base_light.mColor.r == 0 && stage_type != ST_ROOM) {
-        dKyr_get_vectle_calc(&camera->view.lookat.eye, &g_env_light.base_light.mPosition,
-                             &lightDir);
+        dKyr_get_vectle_calc(&eye, &g_env_light.base_light.mPosition, &lightDir);
     } else {
-        dKyr_get_vectle_calc(&camera->view.lookat.eye, &g_env_light.sun_light_pos, &lightDir);
+        dKyr_get_vectle_calc(&eye, &g_env_light.sun_light_pos, &lightDir);
     }
-    o_sunpos->x = camera->view.lookat.eye.x + 8000.0f * lightDir.x;
-    o_sunpos->y = camera->view.lookat.eye.y + 8000.0f * lightDir.y;
-    o_sunpos->z = camera->view.lookat.eye.z + 8000.0f * lightDir.z;
+    o_sunpos->x = eye.x + 8000.0f * lightDir.x;
+    o_sunpos->y = eye.y + 8000.0f * lightDir.y;
+    o_sunpos->z = eye.z + 8000.0f * lightDir.z;
 }
 
 static void dKyr_place_lenzflare(camera_class* camera, cXyz* sunpos, cXyz* o_positions) {

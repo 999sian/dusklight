@@ -13,6 +13,9 @@
 #include "JSystem/J3DGraphBase/J3DMaterial.h"
 #include "SSystem/SComponent/c_math.h"
 #include <cstring>
+#if TARGET_PC
+#include "dusk/vr/vr_main.hpp"
+#endif
 
 static int daVrbox2_color_set(vrbox2_class* param_0);
 
@@ -23,6 +26,24 @@ static void texScrollCheck(f32& param_0) {
     while (param_0 > 1.0f)
         param_0 -= 1.0f;
 }
+
+#if TARGET_PC
+// VR (2026-09-29): centre the sky dome/cloud layer and aim the sun sprite at
+// the headset's eye rather than the flatscreen chase camera, which sits a
+// few hundred units away and orbits Link -- otherwise the sky, sun and
+// clouds swing as Link moves or turns.
+static cXyz daVrbox2_sky_eye(camera_class* camera_p) {
+    f32 eye[3];
+    if (dusk::vr::getVrViewEye(eye)) {
+        return cXyz(eye[0], eye[1], eye[2]);
+    }
+    if (dComIfGd_getView() != NULL) {
+        return cXyz(dComIfGd_getInvViewMtx()[0][3], dComIfGd_getInvViewMtx()[1][3],
+                    dComIfGd_getInvViewMtx()[2][3]);
+    }
+    return camera_p->view.lookat.eye;
+}
+#endif
 
 static int daVrbox2_Draw(vrbox2_class* i_this) {
     camera_class* camera_p;
@@ -120,6 +141,21 @@ static int daVrbox2_Draw(vrbox2_class* i_this) {
 #endif
 
     f32 f29;
+#if TARGET_PC
+    const cXyz skyEye = daVrbox2_sky_eye(camera_p);
+    if (dComIfGd_getView() != NULL) {
+        f29 = (skyEye.y - var_f31) * 0.09f;
+    } else {
+        f29 = 0.0f;
+    }
+
+    dComIfGd_setListSky();
+    mDoMtx_stack_c::transS(skyEye.x, skyEye.y - f29, skyEye.z);
+    kasumim_model_p->setBaseTRMtx(mDoMtx_stack_c::get());
+    mDoExt_modelUpdateDL(kasumim_model_p);
+
+    mDoMtx_stack_c::transS(skyEye.x, skyEye.y - f29, skyEye.z);
+#else
     if (dComIfGd_getView() != NULL) {
         f29 = (dComIfGd_getInvViewMtx()[1][3] - var_f31) * 0.09f;
     } else {
@@ -134,6 +170,7 @@ static int daVrbox2_Draw(vrbox2_class* i_this) {
 
     mDoMtx_stack_c::transS(dComIfGd_getInvViewMtx()[0][3], dComIfGd_getInvViewMtx()[1][3] - f29,
                            dComIfGd_getInvViewMtx()[2][3]);
+#endif
     kumo_model_p->setBaseTRMtx(mDoMtx_stack_c::get());
     mDoExt_modelUpdateDL(kumo_model_p);
 
@@ -153,8 +190,13 @@ static int daVrbox2_Draw(vrbox2_class* i_this) {
         }
 #endif
 
+#if TARGET_PC
+        temp_r19 = cLib_targetAngleX(&skyEye, &sp14);
+        temp_r18 = cLib_targetAngleY(&skyEye, &sp14);
+#else
         temp_r19 = cLib_targetAngleX(&camera_p->view.lookat.eye, &sp14);
         temp_r18 = cLib_targetAngleY(&camera_p->view.lookat.eye, &sp14);
+#endif
         mDoMtx_stack_c::transS(sp14.x, sp14.y, sp14.z);
         mDoMtx_stack_c::YrotM((s16)temp_r18);
         mDoMtx_stack_c::XrotM(0x7FFF + -temp_r19);
@@ -189,8 +231,13 @@ static int daVrbox2_Draw(vrbox2_class* i_this) {
             sp14 = sun_p->mPos[0];
             sp14.y = 300.0f + -(sp14.y * 0.85f);
 
+#if TARGET_PC
+            temp_r19 = cLib_targetAngleX(&skyEye, &sp14);
+            temp_r18 = cLib_targetAngleY(&skyEye, &sp14);
+#else
             temp_r19 = cLib_targetAngleX(&camera_p->view.lookat.eye, &sp14);
             temp_r18 = cLib_targetAngleY(&camera_p->view.lookat.eye, &sp14);
+#endif
             mDoMtx_stack_c::transS(sp14.x, sp14.y, sp14.z);
             mDoMtx_stack_c::YrotM((s16)temp_r18);
             mDoMtx_stack_c::XrotM(0x7FFF + -temp_r19);
@@ -256,6 +303,20 @@ static int daVrbox2_color_set(vrbox2_class* i_this) {
     cam_center.y = 0.0f;
 
     dKyr_get_vectle_calc(&cam_eye, &cam_center, &camFwdXZ);
+#if TARGET_PC
+    // VR (2026-09-29): the base game scrolls the cloud layer by the wind
+    // relative to the CAMERA's facing, so clouds speed up, stop or reverse as
+    // the (invisible, in VR) chase camera turns. In VR use a fixed direction
+    // perpendicular to the wind: steady drift at the speed flatscreen shows
+    // when looking across the wind.
+    if (dusk::vr::isRenderingToHeadset()) {
+        cXyz windXZ(wind_vec.x, 0.0f, wind_vec.z);
+        if (windXZ.abs() > 0.0001f) {
+            windXZ = windXZ.normZP();
+            camFwdXZ.set(windXZ.z, 0.0f, -windXZ.x);
+        }
+    }
+#endif
     f32 temp_f30 =
         cM3d_VectorProduct2d(0.0f, 0.0f, -wind_vec.x, -wind_vec.z, camFwdXZ.x, camFwdXZ.z);
     f32 var_f29 = temp_f30 * 0.0005f * wind_pow;

@@ -8,6 +8,9 @@
 #include "d/actor/d_a_vrbox.h"
 #include "JSystem/J3DGraphBase/J3DMaterial.h"
 #include "f_op/f_op_actor_mng.h"
+#if TARGET_PC
+#include "dusk/vr/vr_main.hpp"
+#endif
 
 static int daVrbox_color_set(vrbox_class* i_this);
 
@@ -31,6 +34,23 @@ static int daVrbox_Draw(vrbox_class* i_this) {
         fvar = dStage_FileList_dt_SeaLevel(filelist_p);
     }
 
+#if TARGET_PC
+    // VR (2026-09-29): centre the sky dome on the headset's eye, not the
+    // flatscreen chase camera -- see d_a_vrbox2.cpp's daVrbox2_sky_eye().
+    f32 skyEye[3] = {0.0f, 0.0f, 0.0f};
+    if (!dusk::vr::getVrViewEye(skyEye) && dComIfGd_getView() != NULL) {
+        skyEye[0] = dComIfGd_getInvViewMtx()[0][3];
+        skyEye[1] = dComIfGd_getInvViewMtx()[1][3];
+        skyEye[2] = dComIfGd_getInvViewMtx()[2][3];
+    }
+    if (dComIfGd_getView() != NULL) {
+        fvar = (skyEye[1] - fvar) * 0.09f;
+    } else {
+        fvar = 0.0f;
+    }
+
+    mDoMtx_stack_c::transS(skyEye[0], skyEye[1] - fvar, skyEye[2]);
+#else
     if (dComIfGd_getView() != NULL) {
         fvar = (dComIfGd_getInvViewMtx()[1][3] - fvar) * 0.09f;
     } else {
@@ -39,6 +59,7 @@ static int daVrbox_Draw(vrbox_class* i_this) {
 
     mDoMtx_stack_c::transS(dComIfGd_getInvViewMtx()[0][3], dComIfGd_getInvViewMtx()[1][3] - fvar,
                            dComIfGd_getInvViewMtx()[2][3]);
+#endif
 
     soraModel_p->setBaseTRMtx(mDoMtx_stack_c::get());
     dKy_GxFog_set();

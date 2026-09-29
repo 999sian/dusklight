@@ -618,6 +618,16 @@ static bool g_vrLightCamValid = false;
 static float g_vrLightEye[3] = {0.f, 0.f, 0.f};
 static float g_vrLightYawRad = 0.f;
 
+bool getVrViewEye(float outEye[3]) {
+    if (!g_vrLightCamValid || !isRenderingToHeadset()) {
+        return false;
+    }
+    for (int i = 0; i < 3; ++i) {
+        outEye[i] = g_vrLightEye[i];
+    }
+    return true;
+}
+
 bool getVrLightingCamera(float outEye[3], float outCenter[3]) {
     if (!g_vrLightCamValid || !isRenderingToHeadset() ||
         getSettings().game.vrLightingMode.getValue() == VrLightingMode::Original) {
