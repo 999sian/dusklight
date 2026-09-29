@@ -71,6 +71,15 @@ enum class LetterboxMode : u8 {
     CutsceneOnly = 3,
 };
 
+// VR lighting (game.vrLightingMode) -- where the base game's camera-attached
+// outdoor fill light comes from in VR. See d_kankyo.cpp's
+// dKy_vr_fill_light_dir().
+enum class VrLightingMode : u8 {
+    Original = 0,    // attached to the (invisible in VR) flatscreen camera
+    SunMoon = 1,     // from the sun by day / moon by night, fixed in the world
+    FollowLook = 2,  // from above and behind your smoothed look direction
+};
+
 enum class TouchTargeting : u8 {
     Hybrid = 0,
     Hold = 1,
@@ -145,6 +154,12 @@ template <>
 struct ConfigEnumRange<LetterboxMode> {
     static constexpr auto min = LetterboxMode::Off;
     static constexpr auto max = LetterboxMode::CutsceneOnly;
+};
+
+template <>
+struct ConfigEnumRange<VrLightingMode> {
+    static constexpr auto min = VrLightingMode::Original;
+    static constexpr auto max = VrLightingMode::FollowLook;
 };
 
 template <>
@@ -530,6 +545,20 @@ struct UserSettings {
         ConfigVar<int> vrSmoothTurnSpeed;
         ConfigVar<bool> vrSnapTurn;
         ConfigVar<int> vrSnapTurnAngle;
+        // First-person comfort tweaks (2026-09-28), all default ON; off
+        // restores the original TPVR behaviour for comparison.
+        //  vrStableCamera: camera anchored to Link's physics position only --
+        //    no facing-relative neck nudge, no one-tick-ahead extrapolation,
+        //    and swimming/crawling/vines/dialogue use position + smoothed
+        //    height instead of the animated head (vr_link_visibility.hpp).
+        //  vrSmoothStartStop: move at the plain speed ramp instead of the
+        //    footstep-synced speed (daAlink_c::posMove()).
+        //  vrInstantStartFacing: face the push direction immediately when
+        //    starting from a standstill (daAlink_c::checkNextAction()).
+        ConfigVar<bool> vrStableCamera;
+        ConfigVar<bool> vrSmoothStartStop;
+        ConfigVar<bool> vrInstantStartFacing;
+        ConfigVar<VrLightingMode> vrLightingMode;
 
         // Audio
         ConfigVar<bool> noLowHpSound;

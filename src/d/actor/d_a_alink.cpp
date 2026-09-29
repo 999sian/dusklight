@@ -12675,7 +12675,8 @@ int daAlink_c::checkNextAction(int param_0) {
         // few steps curved or paused -- reads as steering a body that isn't
         // yours. In VR the player's head IS Link's facing. Ground-only; the
         // ride/swim/vine/magnet states keep their own facing rules.
-        if (checkZeroSpeedF() && checkInputOnR() && dusk::vr::isRenderingToHeadset() &&
+        if (dusk::getSettings().game.vrInstantStartFacing.getValue() &&
+            checkZeroSpeedF() && checkInputOnR() && dusk::vr::isRenderingToHeadset() &&
             dusk::vr::isVrFirstPerson(this) && !checkEventRun() && !checkMagneBootsOn() &&
             !checkModeFlg(MODE_SWIMMING | MODE_VINE_CLIMB | MODE_RIDING))
         {
@@ -13320,7 +13321,8 @@ void daAlink_c::posMove() {
     // mNormalSpeed ramp itself is smooth (+1.9/tick up, -2.2/tick down).
     // Feet may slide slightly during those transitions; the body is hidden
     // in VR first person by default.
-    const bool vrSmoothSpeed = dusk::vr::isRenderingToHeadset() &&
+    const bool vrSmoothSpeed = dusk::getSettings().game.vrSmoothStartStop.getValue() &&
+        dusk::vr::isRenderingToHeadset() &&
         (dusk::vr::isVrFirstPerson(this) || dusk::vr::isWolfFirstPersonView(this));
     if (vrSmoothSpeed) {
         speedF = mNormalSpeed;

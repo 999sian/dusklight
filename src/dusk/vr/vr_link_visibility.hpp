@@ -3297,16 +3297,23 @@ inline bool s_coreAnchorLastTickPosValid = false;
 inline uint64_t s_coreAnchorLastTickPosSimTick = 0;
 inline constexpr float kCoreAnchorTeleportDistanceUnits = 300.0f;  // ~3m/tick
 
-// REMOVED 2026-09-28: kCoreAnchorExtraUpUnits (3in) / kCoreAnchorExtraForwardUnits
-// (6in), a nudge added 2026-08-09 to clear the camera of Link's hunched
-// neck/back while running. The forward part was applied along Link's BODY
+// game.vrStableCamera (default on) turns this nudge OFF. Original note: a
+// 3in-up / 6in-forward nudge added 2026-08-09 to clear the camera of Link's
+// hunched neck/back while running. The forward part was applied along Link's BODY
 // facing (current.angle.y) and scaled by stick-vs-facing alignment, so it
 // swung the camera in an arc whenever Link turned and popped it forward/back
 // within one tick whenever the stick was pressed or released -- camera
 // motion driven by Link's rotation/animation state rather than his position,
 // which was reported as uncomfortable. Target setup is Show Body off
 // (vrShowBody, the default), so there's no body geometry to clear and the
-// anchor is now plain current.pos + calibrated eye height.
+// anchor is now plain current.pos + calibrated eye height. Kept, along with
+// the original stick-alignment scaling, for vrStableCamera off.
+inline constexpr float kCoreAnchorExtraUpUnits = 7.62f;       // 3 real inches
+inline constexpr float kCoreAnchorExtraForwardUnits = 15.24f; // 6 real inches
+
+inline bool isStableCameraOn() {
+    return dusk::getSettings().game.vrStableCamera.getValue();
+}
 
 // Shared by getVrCameraEyeAnchor() and getVrBodyPositionOffset() so both
 // agree on exactly the same definition of "the raw, this-instant,
@@ -3480,12 +3487,30 @@ inline cXyz computeRawCoreAnchoredEye(daAlink_c* link) {
     }
 
     // Position only -- nothing here depends on Link's facing, stick input,
-    // or animation state (see the REMOVED note above trackCoreAnchorPosition()
-    // for the facing-relative nudge that used to be added here). Re-arms the
-    // stance filter so the next non-standing stance seeds from this height.
+    // or animation state (see the note above trackCoreAnchorPosition() for
+    // the facing-relative nudge applied when vrStableCamera is off). Re-arms
+    // the stance filter so the next non-standing stance seeds from this height.
     s_stanceHeightFilterValid = false;
-    return cXyz{link->current.pos.x, link->current.pos.y + s_coreAnchorHeightOffset,
-                link->current.pos.z};
+    cXyz eye{link->current.pos.x, link->current.pos.y + s_coreAnchorHeightOffset,
+             link->current.pos.z};
+    if (!isStableCameraOn()) {
+        // Original behaviour: nudge up, and forward along Link's body facing,
+        // scaled down while the stick points away from that facing.
+        const float yawRad =
+            static_cast<float>(link->current.angle.y) * (3.14159265f / 32768.0f);
+        float forwardAlignment = 1.0f;
+        if (link->checkInputOnR()) {
+            const s16 moveFacingDeltaS =
+                static_cast<s16>(link->mMoveAngle - link->current.angle.y);
+            const float moveFacingDeltaRad =
+                static_cast<float>(moveFacingDeltaS) * (3.14159265f / 32768.0f);
+            forwardAlignment = std::max(0.f, std::cos(moveFacingDeltaRad));
+        }
+        eye.y += kCoreAnchorExtraUpUnits;
+        eye.x += kCoreAnchorExtraForwardUnits * forwardAlignment * std::sin(yawRad);
+        eye.z += kCoreAnchorExtraForwardUnits * forwardAlignment * std::cos(yawRad);
+    }
+    return eye;
 }
 
 // FIXED 2026-08-09 (user request: "in gameplay link's head is on his core
@@ -3606,12 +3631,13 @@ inline cXyz computeRawCoreAnchoredEye(daAlink_c* link) {
 // sits far enough forward (and, per a same-day follow-up report, too low)
 // to clip through Epona's own head/neck geometry. Pulls the anchor BACK
 // along Link's body-facing direction (current.angle.y, the same field/
-// convention d_a_alink.cpp uses for forward-offset placement) and UP,
-// both by fixed real-world distances. Scoped to horse riding only (checkReinRide()) --
+// convention computeRawCoreAnchoredEye() uses for its own (vrStableCamera
+// off) forward-offset nudge, just negated here) and UP, both by fixed
+// real-world distances. Scoped to horse riding only (checkReinRide()) --
 // canoe/board weren't reported and use their own separate offsets
 // (canoeLocalEyeFromRoot/boardLocalEyeFromRoot); don't assume they have
 // the same problem without separate confirmation.
-inline constexpr float kHorseCameraBackUnits = 30.48f;  // 1 real foot (100 units/metre, VR_SCALE_FACTOR)
+inline constexpr float kHorseCameraBackUnits = 30.48f;  // 1 real foot (100 units/metre, see kCoreAnchorExtraForwardUnits's own comment)
 inline constexpr float kHorseCameraUpUnits = 15.24f;    // 6 real inches, same conversion
 
 inline cXyz computeRawEyeAnchor(daAlink_c* link) {
@@ -3635,12 +3661,14 @@ inline cXyz computeRawEyeAnchor(daAlink_c* link) {
         return *link->getSubjectEyePos();
     }
     // Swimming, vines, crawling, heavy-boots underwater walking: physics
-    // position + filtered stance height (computeRawStanceAnchoredEye()).
+    // position + filtered stance height (computeRawStanceAnchoredEye()), or
+    // the animated head joint as originally when vrStableCamera is off.
     if (link->checkModeFlg(daAlink_c::MODE_SWIMMING | daAlink_c::MODE_VINE_CLIMB) ||
         isCrawling(link) || link->checkWaterInMove())
     {
         trackCoreAnchorPosition(link, /*allowRecalibration=*/false);
-        return computeRawStanceAnchoredEye(link);
+        return isStableCameraOn() ? computeRawStanceAnchoredEye(link)
+                                  : *link->getSubjectEyePos();
     }
     if (!link->checkEventRun()) {
         // Ordinary gameplay -- root/core-anchored, section 23.
@@ -3652,7 +3680,7 @@ inline cXyz computeRawEyeAnchor(daAlink_c* link) {
     // trackCoreAnchorPosition() (see its comment -- loads/warps wrapped in
     // an event must still read as a teleport on the way back out).
     dEvt_control_c* event = dComIfGp_getEvent();
-    if (event && event->getMode() == dEvt_mode_TALK_e) {
+    if (isStableCameraOn() && event && event->getMode() == dEvt_mode_TALK_e) {
         return computeRawStanceAnchoredEye(link);
     }
     // Cutscene -- the original, pre-section-23 head-joint anchor, which
@@ -3722,7 +3750,8 @@ inline cXyz computeRawEyeAnchor(daAlink_c* link) {
 // blanket engine-wide behavior change with much wider (and untested)
 // blast radius.
 //
-// CHANGED 2026-09-28: 1.0 -> 0.0 (back to pure interpolation). The
+// CHANGED 2026-09-28: 1.0 -> 0.0 (back to pure interpolation) while
+// game.vrStableCamera is on (the default); off keeps the original 1.0. The
 // "known, accepted tradeoff" above is what was reported as uncomfortable:
 // every start/stop/sharp turn overshot by up to one tick of Link's movement
 // and then snapped back, and during steady movement the camera sat a full
@@ -3731,7 +3760,9 @@ inline cXyz computeRawEyeAnchor(daAlink_c* link) {
 // eye is lerp(prev, curr, step) -- in lockstep with the interpolated world
 // and never outside the two confirmed samples. Head ROTATION still comes
 // straight from the headset every frame; only the anchor position trails.
-inline constexpr float kEyeAnchorExtrapolationGain = 0.0f;
+inline float eyeAnchorExtrapolationGain() {
+    return isStableCameraOn() ? 0.0f : 1.0f;
+}
 }  // namespace detail
 
 // World-space position the VR camera should be anchored to for this frame.
@@ -3839,7 +3870,7 @@ inline cXyz getVrCameraEyeAnchor(const cXyz& fallbackEye,
             const float wolfStep = dusk::interp::get_interpolation_step();
             const cXyz wolfExtrapolated = detail::lerpXyz(
                 detail::s_wolfEyeAnchorPrev, detail::s_wolfEyeAnchorCurr,
-                wolfStep + detail::kEyeAnchorExtrapolationGain);
+                wolfStep + detail::eyeAnchorExtrapolationGain());
 
             // Camera-only 6DOF positional tracking, extended to wolf form
             // (2026-09-14, same-day follow-up to the height/back nudge
@@ -3931,13 +3962,13 @@ inline cXyz getVrCameraEyeAnchor(const cXyz& fallbackEye,
     }
 
     const float step = dusk::interp::get_interpolation_step();
-    // See detail::kEyeAnchorExtrapolationGain's own comment (above,
+    // See detail::eyeAnchorExtrapolationGain()'s own comment (above,
     // next to lerpXyz()) for why this adds the gain to `step` instead of
     // passing `step` straight through -- extrapolates ahead to roughly
     // cancel this engine's usual constant ~1-sim-tick render lag, instead
     // of just smoothing between two already-stale samples.
     const cXyz extrapolated = detail::lerpXyz(detail::s_eyeAnchorPrev, detail::s_eyeAnchorCurr,
-                                               step + detail::kEyeAnchorExtrapolationGain);
+                                               step + detail::eyeAnchorExtrapolationGain());
 
     // Camera-only 6DOF positional tracking (2026-09-11, explicit user
     // request: "the headset can move horizontally and vertically from its

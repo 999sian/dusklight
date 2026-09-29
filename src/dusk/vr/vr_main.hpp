@@ -329,6 +329,20 @@ float getSmoothTurnYawRad();
 // relationship to where the player's head is actually turned in VR.
 s16 getHeadMoveAngleS();
 
+// Viewpoint for the base game's camera-relative lighting (d_kankyo.cpp's
+// dKy_light_eye()/dKy_light_center(), 2026-09-28). The kankyo code places
+// several lights relative to dComIfGp_getCamera(0)'s lookat eye/center --
+// most importantly settingTevStruct()'s outdoor fill light, which shines on
+// every object from the camera's side. In VR that camera is the invisible
+// flatscreen follow camera, which swings around behind Link as he moves, so
+// the whole scene relit with it. This gives the VR eye position instead,
+// plus a centre point along the HEADSET's yaw, smoothed over about a second
+// (level, no pitch) so glancing around doesn't relight anything. Returns
+// false outside VR rendering, or with game.vrLightingMode = Original; callers
+// then keep using the game camera.
+// Plain floats rather than cXyz, same header-layering reason as above.
+bool getVrLightingCamera(float outEye[3], float outCenter[3]);
+
 // Physical sword (game.vrPhysicalSword): true while the sword hand is moving
 // fast enough to count as a swing (same speed the swing gesture fires at).
 bool isPhysicalSwordSwingActive();

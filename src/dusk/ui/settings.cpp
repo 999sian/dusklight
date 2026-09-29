@@ -93,6 +93,12 @@ constexpr std::array kLetterboxModes = {
     "Only During Cutscenes",
 };
 
+constexpr std::array kVrLightingModeLabels = {
+    "Original",
+    "Sun/Moon",
+    "Follow Look",
+};
+
 constexpr std::array kTouchTargetingLabels = {
     "Hybrid",
     "Hold",
@@ -956,6 +962,75 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                             "and collision stay where the game puts him, so leaning far enough "
                             "can let you see through thin geometry. The maximum lean distance "
                             "is tunable in Debug > Graphics Settings. On by default."
+            });
+
+        config_bool_select(leftPane, rightPane, getSettings().game.vrStableCamera,
+            {
+                .key = "Stable First-Person Camera",
+                .helpText = "Anchors the first-person camera to Link's actual position only, "
+                            "so his running, turning and idle animations don't move your view. "
+                            "Also applies while swimming, crawling, climbing vines and talking "
+                            "(height eases between stances instead of bobbing). Off restores "
+                            "the original camera, which leans forward along Link's body while "
+                            "running. On by default."
+            });
+        config_bool_select(leftPane, rightPane, getSettings().game.vrSmoothStartStop,
+            {
+                .key = "Smooth Start/Stop",
+                .helpText = "Speeds Link up and slows him down at an even rate. The original "
+                            "game syncs his speed to his footsteps when starting and stopping, "
+                            "which in first person feels like a stutter. Off restores the "
+                            "original footstep-synced movement. On by default."
+            });
+        config_bool_select(leftPane, rightPane, getSettings().game.vrInstantStartFacing,
+            {
+                .key = "Instant Start Facing",
+                .helpText = "When you start moving from a standstill, Link immediately faces "
+                            "the direction you push, instead of turning on the spot or curving "
+                            "round from wherever he was last facing. Off restores the original "
+                            "turn. On by default."
+            });
+
+        leftPane.add_section("Lighting");
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Lighting",
+                .getValue =
+                    [] {
+                        return kVrLightingModeLabels[static_cast<u8>(
+                            getSettings().game.vrLightingMode.getValue())];
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.vrLightingMode.getValue() !=
+                               getSettings().game.vrLightingMode.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                for (int i = 0; i < static_cast<int>(kVrLightingModeLabels.size()); i++) {
+                    pane.add_button({
+                            .text = kVrLightingModeLabels[i],
+                            .isSelected =
+                                [i] {
+                                    return getSettings().game.vrLightingMode.getValue() ==
+                                           static_cast<VrLightingMode>(i);
+                                },
+                        })
+                        .on_pressed([i] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.vrLightingMode.setValue(static_cast<VrLightingMode>(i));
+                            config::save();
+                        });
+                }
+                pane.add_rml(
+                    "<br/>Where the main light on characters and objects comes from outdoors. "
+                    "The original game attaches it to the camera, which in VR is an invisible "
+                    "camera swinging around behind Link, so the scene relights as you move."
+                    "<br/><br/><b>Original:</b> the game's camera-attached light."
+                    "<br/><b>Sun/Moon:</b> from the sun by day and the moon by night. Fixed in "
+                    "the world; only changes with time of day. (Default)"
+                    "<br/><b>Follow Look:</b> from above and behind where you're looking, "
+                    "following your head with about a one-second delay.");
             });
 
         leftPane.add_section("Turning");

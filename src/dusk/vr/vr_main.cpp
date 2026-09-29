@@ -609,6 +609,32 @@ s16 getHeadMoveAngleS() {
     return g_headMoveAngleS;
 }
 
+// Backing state for getVrLightingCamera() (vr_main.hpp). Updated once per
+// real frame in tick(), right after the camera eye anchor is computed.
+// kVrLightYawTimeConstantSec: how long the fill light takes to follow a new
+// head direction (~63% of the way after this long). Longer = calmer.
+static constexpr float kVrLightYawTimeConstantSec = 1.0f;
+static bool g_vrLightCamValid = false;
+static float g_vrLightEye[3] = {0.f, 0.f, 0.f};
+static float g_vrLightYawRad = 0.f;
+
+bool getVrLightingCamera(float outEye[3], float outCenter[3]) {
+    if (!g_vrLightCamValid || !isRenderingToHeadset() ||
+        getSettings().game.vrLightingMode.getValue() == VrLightingMode::Original) {
+        return false;
+    }
+    // Same yaw convention as current.angle.y / mMoveAngle: 0 faces +Z,
+    // positive turns toward +X. 1000 units is arbitrary -- callers only
+    // use the eye->centre direction.
+    for (int i = 0; i < 3; ++i) {
+        outEye[i] = g_vrLightEye[i];
+    }
+    outCenter[0] = g_vrLightEye[0] + 1000.f * std::sin(g_vrLightYawRad);
+    outCenter[1] = g_vrLightEye[1];
+    outCenter[2] = g_vrLightEye[2] + 1000.f * std::cos(g_vrLightYawRad);
+    return true;
+}
+
 // Physical sword (game.vrPhysicalSword): true while the sword hand is moving
 // fast enough to count as a swing. Updated once per real frame in tick();
 // read once per sim tick by daAlink_c::setAtCollision() to arm the sword's
@@ -2479,6 +2505,26 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     // HMD sample this session.
     const cXyz vrCameraEyeAnchor = vr_link::getVrCameraEyeAnchor(
         currentView->lookat.eye, &hmdPose.position, dusk::vr::getSmoothTurnYawRad());
+
+    // Lighting viewpoint -- see getVrLightingCamera(). Exponential ease of
+    // the head yaw toward its current value, frame-rate independent.
+    {
+        constexpr float kBamsToRad = 3.14159265f / 32768.0f;
+        const float headYawRad = static_cast<float>(g_headMoveAngleS) * kBamsToRad;
+        if (!g_vrLightCamValid) {
+            g_vrLightYawRad = headYawRad;
+        } else {
+            float delta = headYawRad - g_vrLightYawRad;
+            delta = std::remainder(delta, 2.f * 3.14159265f);  // shortest way round
+            const float blend =
+                1.f - std::exp(-static_cast<float>(pacing.dt) / kVrLightYawTimeConstantSec);
+            g_vrLightYawRad = std::remainder(g_vrLightYawRad + delta * blend, 2.f * 3.14159265f);
+        }
+        g_vrLightEye[0] = vrCameraEyeAnchor.x;
+        g_vrLightEye[1] = vrCameraEyeAnchor.y;
+        g_vrLightEye[2] = vrCameraEyeAnchor.z;
+        g_vrLightCamValid = true;
+    }
 
     // --- locate both eyes for this frame ---
     XrViewLocateInfo locateInfo{XR_TYPE_VIEW_LOCATE_INFO};

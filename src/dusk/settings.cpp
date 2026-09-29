@@ -163,6 +163,10 @@ UserSettings g_userSettings = {
         .vrSmoothTurnSpeed {"game.vrSmoothTurnSpeed", 135},
         .vrSnapTurn {"game.vrSnapTurn", false},
         .vrSnapTurnAngle {"game.vrSnapTurnAngle", 45},
+        .vrStableCamera {"game.vrStableCamera", true},
+        .vrSmoothStartStop {"game.vrSmoothStartStop", true},
+        .vrInstantStartFacing {"game.vrInstantStartFacing", true},
+        .vrLightingMode {"game.vrLightingMode", VrLightingMode::SunMoon},
 
         // Audio
         .noLowHpSound {"game.noLowHpSound", false},
@@ -435,6 +439,10 @@ void registerSettings() {
     Register(g_userSettings.game.vrSmoothTurnSpeed);
     Register(g_userSettings.game.vrSnapTurn);
     Register(g_userSettings.game.vrSnapTurnAngle);
+    Register(g_userSettings.game.vrStableCamera);
+    Register(g_userSettings.game.vrSmoothStartStop);
+    Register(g_userSettings.game.vrInstantStartFacing);
+    Register(g_userSettings.game.vrLightingMode);
     Register(g_userSettings.game.enableFastIronBoots);
     Register(g_userSettings.game.canTransformAnywhere);
     Register(g_userSettings.game.fastRoll);
