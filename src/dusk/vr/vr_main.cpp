@@ -622,6 +622,11 @@ static bool g_vrAudioValid = false;
 static Mtx g_vrAudioViewMtx;
 static float g_vrAudioEye[3] = {0.f, 0.f, 0.f};
 static float g_vrAudioCenter[3] = {0.f, 0.f, 0.f};
+static float g_vrListenerPos[3] = {0.f, 0.f, 0.f};
+
+float* getVrListenerPosPtr() {
+    return g_vrListenerPos;
+}
 
 bool getVrAudioListener(float (*outViewMtx)[4], float outEye[3], float outCenter[3]) {
     if (!g_vrAudioValid || !isRenderingToHeadset()) {
@@ -2588,6 +2593,9 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         g_vrAudioCenter[0] = vrCameraEyeAnchor.x + fwd.x * 100.f;
         g_vrAudioCenter[1] = vrCameraEyeAnchor.y + fwd.y * 100.f;
         g_vrAudioCenter[2] = vrCameraEyeAnchor.z + fwd.z * 100.f;
+        g_vrListenerPos[0] = vrCameraEyeAnchor.x;
+        g_vrListenerPos[1] = vrCameraEyeAnchor.y;
+        g_vrListenerPos[2] = vrCameraEyeAnchor.z;
         g_vrAudioValid = true;
     }
 

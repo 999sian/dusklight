@@ -358,6 +358,12 @@ bool getVrViewEye(float outEye[3]);
 // outside VR rendering.
 bool getVrAudioListener(float (*outViewMtx)[4], float outEye[3], float outCenter[3]);
 
+// Persistent storage (x, y, z) that tracks the audio listener's position
+// every frame -- stable address for the lifetime of the process, so sound
+// objects can follow it by pointer. Used to play Link's own sounds from the
+// player's head in first-person VR (daAlink_c, 2026-09-29).
+float* getVrListenerPosPtr();
+
 // Physical sword (game.vrPhysicalSword): true while the sword hand is moving
 // fast enough to count as a swing (same speed the swing gesture fires at).
 bool isPhysicalSwordSwingActive();

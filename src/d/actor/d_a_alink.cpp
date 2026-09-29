@@ -19268,6 +19268,24 @@ int daAlink_c::execute() {
     // there can't drift onto two different definitions of "should the
     // body be forced to face the headset right now" -- see that shared
     // function's own comment for exactly why each state is excluded.
+    // VR first person (2026-09-29): play Link's own sounds (footsteps, voice,
+    // body/equipment SE) from the player's head. Otherwise they come from
+    // points on his hidden body -- feet, mouth, hip -- which sit off to one
+    // side of the head (e.g. footsteps land ahead in the direction of travel,
+    // i.e. to the side when looking sideways while running). Pointed at
+    // storage that vr::tick() updates every frame with the listener position,
+    // so they stay exactly centred; restored to his body otherwise.
+    {
+        using SoundPos = JGeometry::TVec3<f32>;
+        const bool vrEars = dusk::vr::isRenderingToHeadset() && dusk::vr::isVrFirstPerson(this);
+        SoundPos* listener = reinterpret_cast<SoundPos*>(dusk::vr::getVrListenerPosPtr());
+        mZ2Link.mSoundObjAnime.pos_ =
+            vrEars ? listener : reinterpret_cast<SoundPos*>(&current.pos);
+        mZ2Link.mSoundObjSimple1.pos_ = vrEars ? listener : reinterpret_cast<SoundPos*>(&eyePos);
+        mZ2Link.mSoundObjSimple2.pos_ =
+            vrEars ? listener : reinterpret_cast<SoundPos*>(&field_0x3720);
+    }
+
     if (dusk::vr::isRenderingToHeadset() && dusk::vr::isVrForcingBodyYawToHeadset(this)) {
         const s16 freshHeadYawS = dusk::vr::getHeadMoveAngleS();
         // ROOT CAUSE (found 2026-09-11 via a real debugger session):
