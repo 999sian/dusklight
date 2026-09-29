@@ -3,6 +3,7 @@
 #if TARGET_PC
 #include "dusk/audio/DuskDsp.hpp"
 #include "dusk/settings.h"
+#include "dusk/vr/vr_main.hpp"
 #include <cmath>
 #endif
 #include "Z2AudioLib/Z2Calc.h"
@@ -516,6 +517,23 @@ void Z2Audience::setAudioCamera(f32 (*viewMatrix)[4], Vec& pos, Vec& param_2, f3
                                 f32 param_4, bool param_5, int camID, bool initial) {
     JUT_ASSERT(687, camID >= 0);
     JUT_ASSERT(688, camID < mNumPlayers);
+#if TARGET_PC
+    // VR (2026-09-29): listen from the headset, not the flatscreen chase
+    // camera -- every caller (d_camera's per-tick update, frame-interp's
+    // per-frame presentation) goes through here, so one substitution covers
+    // them all regardless of which ran last before audio processing.
+    Mtx vrViewMtx;
+    Vec vrEye, vrCenter;
+    f32 eye[3], center[3];
+    if (camID == 0 && dusk::vr::getVrAudioListener(vrViewMtx, eye, center)) {
+        vrEye = {eye[0], eye[1], eye[2]};
+        vrCenter = {center[0], center[1], center[2]};
+        mAudioCamera[camID].setCameraState(vrViewMtx, vrEye, vrCenter, param_3, param_4, param_5,
+                                           initial);
+        mLinkMic->setMicState(&mAudioCamera[camID], camID);
+        return;
+    }
+#endif
     mAudioCamera[camID].setCameraState(viewMatrix, pos, param_2, param_3, param_4, param_5, initial);
     mLinkMic->setMicState(&mAudioCamera[camID], camID);
 }

@@ -349,6 +349,15 @@ bool getVrLightingCamera(float outEye[3], float outCenter[3]);
 // lighting mode. Returns false outside VR rendering.
 bool getVrViewEye(float outEye[3]);
 
+// Audio listener pose for this frame, from the headset (2026-09-29): the
+// head-centre view matrix (3x4, same form as view_class::viewMtx), the eye
+// position, and a point along the head's forward direction. Used by
+// Z2Audience::setAudioCamera() to replace the flatscreen chase camera as the
+// sound listener in VR -- otherwise positional sounds come from directions
+// relative to a camera that isn't where the player's head is. Returns false
+// outside VR rendering.
+bool getVrAudioListener(float (*outViewMtx)[4], float outEye[3], float outCenter[3]);
+
 // Physical sword (game.vrPhysicalSword): true while the sword hand is moving
 // fast enough to count as a swing (same speed the swing gesture fires at).
 bool isPhysicalSwordSwingActive();

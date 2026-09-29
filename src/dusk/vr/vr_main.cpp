@@ -618,6 +618,23 @@ static bool g_vrLightCamValid = false;
 static float g_vrLightEye[3] = {0.f, 0.f, 0.f};
 static float g_vrLightYawRad = 0.f;
 
+static bool g_vrAudioValid = false;
+static Mtx g_vrAudioViewMtx;
+static float g_vrAudioEye[3] = {0.f, 0.f, 0.f};
+static float g_vrAudioCenter[3] = {0.f, 0.f, 0.f};
+
+bool getVrAudioListener(float (*outViewMtx)[4], float outEye[3], float outCenter[3]) {
+    if (!g_vrAudioValid || !isRenderingToHeadset()) {
+        return false;
+    }
+    std::memcpy(outViewMtx, g_vrAudioViewMtx, sizeof(Mtx));
+    for (int i = 0; i < 3; ++i) {
+        outEye[i] = g_vrAudioEye[i];
+        outCenter[i] = g_vrAudioCenter[i];
+    }
+    return true;
+}
+
 bool getVrViewEye(float outEye[3]) {
     if (!g_vrLightCamValid || !isRenderingToHeadset()) {
         return false;
@@ -2556,6 +2573,22 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         g_vrLightEye[1] = vrCameraEyeAnchor.y;
         g_vrLightEye[2] = vrCameraEyeAnchor.z;
         g_vrLightCamValid = true;
+    }
+
+    // Audio listener -- see getVrAudioListener(). Head-centre view, same
+    // construction as beginStereoPass()'s V_c.
+    {
+        const float yaw = dusk::vr::getSmoothTurnYawRad();
+        vr_render::eyePoseToViewMtx(g_vrAudioViewMtx, hmdPose, hmdPose.position,
+                                    vrCameraEyeAnchor, vr_render::kEyePosScale, yaw);
+        const cXyz fwd = vr_render::computeHeadWorldForward(hmdPose, yaw);
+        g_vrAudioEye[0] = vrCameraEyeAnchor.x;
+        g_vrAudioEye[1] = vrCameraEyeAnchor.y;
+        g_vrAudioEye[2] = vrCameraEyeAnchor.z;
+        g_vrAudioCenter[0] = vrCameraEyeAnchor.x + fwd.x * 100.f;
+        g_vrAudioCenter[1] = vrCameraEyeAnchor.y + fwd.y * 100.f;
+        g_vrAudioCenter[2] = vrCameraEyeAnchor.z + fwd.z * 100.f;
+        g_vrAudioValid = true;
     }
 
     // --- locate both eyes for this frame ---
