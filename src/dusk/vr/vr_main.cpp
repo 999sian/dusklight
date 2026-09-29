@@ -2195,11 +2195,33 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         // a cutscene first-person instead (isVrFirstPerson() true there),
         // matching this whole mechanism's original "plain first-person VR
         // is completely untouched" design intent.
+        // EXTENDED 2026-09-29 (game.vrCutsceneFaceCamera, default on): covers
+        // every event where the view follows the game's camera (third-person
+        // fallback during any event -- real cutscenes, and e.g. events where
+        // Link isn't drawn), not just isRealCutsceneRunning(); and on the
+        // way back out, snaps to Link's facing so gameplay resumes looking
+        // where he faces. The setting off disables all of this block.
+        const bool faceCutsceneCamera = dusk::getSettings().game.vrCutsceneFaceCamera.getValue();
+        auto* cutsceneLink = static_cast<daAlink_c*>(dComIfGp_getLinkPlayer());
         bool cutsceneActive = false;
-        if (dusk::vr::isRealCutsceneRunning()) {
-            if (auto* link = static_cast<daAlink_c*>(dComIfGp_getLinkPlayer())) {
-                cutsceneActive = !dusk::vr::isVrFirstPerson(link);
-            }
+        if (faceCutsceneCamera && cutsceneLink != nullptr) {
+            const bool eventCamera = cutsceneLink->checkEventRun() &&
+                                     !dusk::vr::isVrFirstPerson(cutsceneLink) &&
+                                     !dusk::vr::isWolfFirstPersonView(cutsceneLink);
+            cutsceneActive = eventCamera ||
+                             (dusk::vr::isRealCutsceneRunning() &&
+                              !dusk::vr::isVrFirstPerson(cutsceneLink));
+        }
+
+        if (!cutsceneActive && s_cutsceneJumpCutWasActive && faceCutsceneCamera &&
+            cutsceneLink != nullptr)
+        {
+            // Event just ended: face the way Link faces.
+            const cXyz currentHeadForward = vr_render::computeHeadWorldForward(
+                hmdPose, dusk::vr::getSmoothTurnYawRad());
+            const s16 currentYawS = cM_atan2s(currentHeadForward.x, currentHeadForward.z);
+            dusk::vr::snapScriptedCameraYaw(
+                cM_s2rad(static_cast<s16>(cutsceneLink->shape_angle.y - currentYawS)));
         }
 
         if (cutsceneActive) {
@@ -3284,23 +3306,27 @@ void submitFrame() {
     {
         static int s_replayFrames = 0;
         static double s_replayMs = 0.0, s_replayMaxMs = 0.0;
-        static int s_replayModels = 0, s_replayPasses = 0;
+        static int s_replayModels = 0, s_replayPasses = 0, s_recorded = 0;
+        static double s_recordMs = 0.0;
         const auto stats = dusk::interp::material::take_replay_stats();
         ++s_replayFrames;
         s_replayMs += stats.ms;
         s_replayMaxMs = std::max(s_replayMaxMs, stats.ms);
         s_replayModels += stats.models;
         s_replayPasses += stats.passes;
+        s_recordMs += stats.recordMs;
+        s_recorded += stats.recorded;
         if (s_replayFrames >= 144) {
             char msg[200];
             duskVrSnprintf(msg, sizeof(msg),
                 "[dusk::vr::replayperf] frames=%d avgMs=%.3f maxMs=%.3f "
-                "modelsPerFrame=%.1f passesPerFrame=%.2f\n",
+                "modelsPerFrame=%.1f passesPerFrame=%.2f recordMsPerFrame=%.3f recordedPerFrame=%.1f\n",
                 s_replayFrames, s_replayMs / s_replayFrames, s_replayMaxMs,
-                double(s_replayModels) / s_replayFrames, double(s_replayPasses) / s_replayFrames);
+                double(s_replayModels) / s_replayFrames, double(s_replayPasses) / s_replayFrames,
+                s_recordMs / s_replayFrames, double(s_recorded) / s_replayFrames);
             duskVrLog(msg);
-            s_replayFrames = s_replayModels = s_replayPasses = 0;
-            s_replayMs = s_replayMaxMs = 0.0;
+            s_replayFrames = s_replayModels = s_replayPasses = s_recorded = 0;
+            s_replayMs = s_replayMaxMs = s_recordMs = 0.0;
         }
     }
 

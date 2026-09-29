@@ -418,6 +418,8 @@ void main01(void) {
             // dusk::interp::material::set_defer_model_replay()).
             dusk::interp::material::set_defer_model_replay(dusk::vr::isActive() &&
                                                            dusk::vr::isRenderingToHeadset());
+            dusk::interp::material::set_record_lit_models(
+                dusk::getSettings().game.vrAccurateObjectLighting.getValue());
             dusk::interp::begin_presentation(step);
             // FIXED (v10): isActive() alone used to gate this, which blanked
             // the flatscreen (menus, video, loading screens included) for the

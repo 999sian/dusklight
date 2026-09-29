@@ -574,6 +574,28 @@ void set_defer_model_replay(bool defer) {
     s_deferModelReplay = defer;
 }
 
+bool s_recordLitModels = true;
+
+void set_record_lit_models(bool enabled) {
+    s_recordLitModels = enabled;
+}
+
+bool has_recorded_light_view(const J3DModelData* data) {
+    if (!s_deferModelReplay || !s_recordLitModels) {
+        return false;
+    }
+    const auto& views = tables().lightViews;
+    if (views.empty()) {
+        return false;
+    }
+    for (u16 i = 0, n = data->getMaterialNum(); i < n; ++i) {
+        if (views.contains(data->getMaterialNodePointer(i))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool is_model_replay_deferred() {
     return s_deferModelReplay;
 }
@@ -589,12 +611,16 @@ void record_model(J3DModel* model) {
         return;
     }
 
+    const auto recordStart = std::chrono::steady_clock::now();
     auto recording = std::make_shared<Recording>();
     recording->model = model;
     J3DModelData* data = model->getModelData();
     for (u16 i = 0; i < data->getMaterialNum(); ++i) {
         recording->bindings.capture(data->getMaterialNodePointer(i));
     }
+    s_replayStats.recordMs += std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - recordStart).count();
+    ++s_replayStats.recorded;
 
     auto& live = live_recordings();
     std::erase_if(live, [](const auto& weak) { return weak.expired(); });

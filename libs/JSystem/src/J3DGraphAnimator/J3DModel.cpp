@@ -539,7 +539,9 @@ void J3DModel::entry() {
     }
 
 #if TARGET_PC
-    if (mModelData->needsInterpCallBack()) {
+    if (mModelData->needsInterpCallBack() ||
+        dusk::interp::material::has_recorded_light_view(mModelData))
+    {
         dusk::interp::material::record_model(this);
     }
 #endif

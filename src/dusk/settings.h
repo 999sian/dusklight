@@ -564,6 +564,14 @@ struct UserSettings {
         // camera's view. Default off in VR -- it tracks an invisible camera
         // and pumps scene brightness when walking in/out of cover.
         ConfigVar<bool> vrSunGlareDimming;
+        // Snap the view's yaw to the game camera at the start of each event/
+        // cutscene and on every camera cut, and to Link's facing when it ends
+        // (vr_main.cpp's cutscene jump-cut block). Default on.
+        ConfigVar<bool> vrCutsceneFaceCamera;
+        // Re-light static lit models (signs, props) per VR view too, not just
+        // animated ones (dusk::interp::material::has_recorded_light_view()).
+        // Default on; off trades lighting accuracy for CPU time.
+        ConfigVar<bool> vrAccurateObjectLighting;
 
         // Audio
         ConfigVar<bool> noLowHpSound;

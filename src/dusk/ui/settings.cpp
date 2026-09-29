@@ -1032,6 +1032,14 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     "<br/><b>Follow Look:</b> from above and behind where you're looking, "
                     "following your head with about a one-second delay.");
             });
+        config_bool_select(leftPane, rightPane, getSettings().game.vrAccurateObjectLighting,
+            {
+                .key = "Accurate Object Lighting",
+                .helpText = "Lights signs, fences, crates and other still objects from your "
+                            "own view. Off, they keep lighting meant for the flatscreen camera, "
+                            "which shifts as you move around them, but it saves some processor "
+                            "time in busy areas. On by default."
+            });
         config_bool_select(leftPane, rightPane, getSettings().game.vrSunGlareDimming,
             {
                 .key = "Sun Glare Dimming",
@@ -1044,6 +1052,16 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             });
 
         leftPane.add_section("Turning");
+        config_bool_select(leftPane, rightPane, getSettings().game.vrCutsceneFaceCamera,
+            {
+                .key = "Face Cutscene Camera",
+                .helpText = "At the start of a cutscene and every time it cuts to a new shot, "
+                            "turns your view to face the way the cutscene camera points, no "
+                            "matter how you'd turned in-game. When the cutscene ends, turns "
+                            "you to face the way Link faces. Smooth camera pans inside a shot "
+                            "are never followed, so the view never slides on its own. On by "
+                            "default."
+            });
         config_bool_select(leftPane, rightPane, getSettings().game.vrSnapTurn,
             {
                 .key = "Snap Turn",

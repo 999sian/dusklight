@@ -168,6 +168,8 @@ UserSettings g_userSettings = {
         .vrInstantStartFacing {"game.vrInstantStartFacing", true},
         .vrLightingMode {"game.vrLightingMode", VrLightingMode::SunMoon},
         .vrSunGlareDimming {"game.vrSunGlareDimming", false},
+        .vrCutsceneFaceCamera {"game.vrCutsceneFaceCamera", true},
+        .vrAccurateObjectLighting {"game.vrAccurateObjectLighting", true},
 
         // Audio
         .noLowHpSound {"game.noLowHpSound", false},
@@ -445,6 +447,8 @@ void registerSettings() {
     Register(g_userSettings.game.vrInstantStartFacing);
     Register(g_userSettings.game.vrLightingMode);
     Register(g_userSettings.game.vrSunGlareDimming);
+    Register(g_userSettings.game.vrCutsceneFaceCamera);
+    Register(g_userSettings.game.vrAccurateObjectLighting);
     Register(g_userSettings.game.enableFastIronBoots);
     Register(g_userSettings.game.canTransformAnywhere);
     Register(g_userSettings.game.fastRoll);
