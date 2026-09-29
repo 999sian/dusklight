@@ -539,15 +539,31 @@ void ModelBindings::restore() {
     std::apply([](auto&... values) { (values.restore(), ...); }, m_state->values);
 }
 
+namespace {
+struct Recording {
+    J3DModel* model;
+    ModelBindings bindings;
+};
+
+// Weak references to this capture's model recordings, for
+// replay_models_for_current_view(). The interpolation callback list owns the
+// recordings; these expire when it is cleared for the next capture.
+std::vector<std::weak_ptr<Recording>>& live_recordings() {
+    static std::vector<std::weak_ptr<Recording>> stored;
+    return stored;
+}
+
+void replay_recording(Recording& recording) {
+    ModelScope scope(recording.bindings);
+    recording.model->calcMaterial();
+    recording.model->diff();
+}
+}  // namespace
+
 void record_model(J3DModel* model) {
     if (!should_capture() || is_presentation_active()) {
         return;
     }
-
-    struct Recording {
-        J3DModel* model;
-        ModelBindings bindings;
-    };
 
     auto recording = std::make_shared<Recording>();
     recording->model = model;
@@ -556,12 +572,21 @@ void record_model(J3DModel* model) {
         recording->bindings.capture(data->getMaterialNodePointer(i));
     }
 
+    auto& live = live_recordings();
+    std::erase_if(live, [](const auto& weak) { return weak.expired(); });
+    live.push_back(recording);
+
     add_interpolation_callback([](void* work) {
-        auto& recording = *static_cast<Recording*>(work);
-        ModelScope scope(recording.bindings);
-        recording.model->calcMaterial();
-        recording.model->diff();
+        replay_recording(*static_cast<Recording*>(work));
     }, recording.get(), recording);
+}
+
+void replay_models_for_current_view() {
+    for (const auto& weak : live_recordings()) {
+        if (auto recording = weak.lock()) {
+            replay_recording(*recording);
+        }
+    }
 }
 
 void set_view_projection(J3DTexMtxInfo* info, f32 scaleS, f32 scaleT, f32 transS, f32 transT) {

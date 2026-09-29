@@ -87,6 +87,15 @@ private:
 
 void record_model(J3DModel* model);
 
+// Re-runs every recorded model's material replay (interpolated values,
+// view-relative lights re-aimed via LightView, calcMaterial(), diff())
+// against the CURRENT j3dSys view matrix. The normal replay runs once in
+// begin_presentation() against the flatscreen camera; VR calls this again
+// inside each eye/stereo pass after installing the headset view, otherwise
+// replayed models (NPCs, objects) keep lights aimed for the invisible
+// flatscreen camera -- lighting that swings as the head turns or Link moves.
+void replay_models_for_current_view();
+
 void set_view_projection(J3DTexMtxInfo* info, f32 scaleS, f32 scaleT, f32 transS, f32 transT);
 void record_light_view(J3DMaterial* material);
 
