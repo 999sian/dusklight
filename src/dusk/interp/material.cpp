@@ -13,6 +13,7 @@
 #include "JSystem/J3DGraphBase/J3DMaterial.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <memory>
 #include <tuple>
@@ -539,29 +540,107 @@ void ModelBindings::restore() {
     std::apply([](auto&... values) { (values.restore(), ...); }, m_state->values);
 }
 
+namespace {
+struct Recording {
+    J3DModel* model;
+    ModelBindings bindings;
+};
+
+// Weak references to this capture's model recordings, for
+// replay_models_for_current_view(). The interpolation callback list owns the
+// recordings; these expire when it is cleared for the next capture.
+std::vector<std::weak_ptr<Recording>>& live_recordings() {
+    static std::vector<std::weak_ptr<Recording>> stored;
+    return stored;
+}
+
+bool s_deferModelReplay = false;
+ReplayStats s_replayStats;
+
+void replay_recording(Recording& recording) {
+    const auto start = std::chrono::steady_clock::now();
+    {
+        ModelScope scope(recording.bindings);
+        recording.model->calcMaterial();
+        recording.model->diff();
+    }
+    s_replayStats.ms +=
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+    ++s_replayStats.models;
+}
+}  // namespace
+
+void set_defer_model_replay(bool defer) {
+    s_deferModelReplay = defer;
+}
+
+bool s_recordLitModels = true;
+
+void set_record_lit_models(bool enabled) {
+    s_recordLitModels = enabled;
+}
+
+bool has_recorded_light_view(const J3DModelData* data) {
+    if (!s_deferModelReplay || !s_recordLitModels) {
+        return false;
+    }
+    const auto& views = tables().lightViews;
+    if (views.empty()) {
+        return false;
+    }
+    for (u16 i = 0, n = data->getMaterialNum(); i < n; ++i) {
+        if (views.contains(data->getMaterialNodePointer(i))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool is_model_replay_deferred() {
+    return s_deferModelReplay;
+}
+
+ReplayStats take_replay_stats() {
+    const ReplayStats stats = s_replayStats;
+    s_replayStats = {};
+    return stats;
+}
+
 void record_model(J3DModel* model) {
     if (!should_capture() || is_presentation_active()) {
         return;
     }
 
-    struct Recording {
-        J3DModel* model;
-        ModelBindings bindings;
-    };
-
+    const auto recordStart = std::chrono::steady_clock::now();
     auto recording = std::make_shared<Recording>();
     recording->model = model;
     J3DModelData* data = model->getModelData();
     for (u16 i = 0; i < data->getMaterialNum(); ++i) {
         recording->bindings.capture(data->getMaterialNodePointer(i));
     }
+    s_replayStats.recordMs += std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - recordStart).count();
+    ++s_replayStats.recorded;
+
+    auto& live = live_recordings();
+    std::erase_if(live, [](const auto& weak) { return weak.expired(); });
+    live.push_back(recording);
 
     add_interpolation_callback([](void* work) {
-        auto& recording = *static_cast<Recording*>(work);
-        ModelScope scope(recording.bindings);
-        recording.model->calcMaterial();
-        recording.model->diff();
+        if (s_deferModelReplay) {
+            return;  // replayed per view instead -- see set_defer_model_replay()
+        }
+        replay_recording(*static_cast<Recording*>(work));
     }, recording.get(), recording);
+}
+
+void replay_models_for_current_view() {
+    ++s_replayStats.passes;
+    for (const auto& weak : live_recordings()) {
+        if (auto recording = weak.lock()) {
+            replay_recording(*recording);
+        }
+    }
 }
 
 void set_view_projection(J3DTexMtxInfo* info, f32 scaleS, f32 scaleT, f32 transS, f32 transT) {

@@ -12667,6 +12667,23 @@ int daAlink_c::checkNextAction(int param_0) {
     } else {
         field_0x2f98 = 4;
 
+        // VR first person (2026-09-28): starting from a standstill, face the
+        // push direction (mMoveAngle = stick + headset yaw) immediately. The
+        // base game instead pivots in place (PROC_WAIT_TURN, >168 deg) or
+        // starts off along the old facing and eases ~20% of the remaining
+        // angle per tick, so after looking around while standing the first
+        // few steps curved or paused -- reads as steering a body that isn't
+        // yours. In VR the player's head IS Link's facing. Ground-only; the
+        // ride/swim/vine/magnet states keep their own facing rules.
+        if (dusk::getSettings().game.vrInstantStartFacing.getValue() &&
+            checkZeroSpeedF() && checkInputOnR() && dusk::vr::isRenderingToHeadset() &&
+            dusk::vr::isVrFirstPerson(this) && !checkEventRun() && !checkMagneBootsOn() &&
+            !checkModeFlg(MODE_SWIMMING | MODE_VINE_CLIMB | MODE_RIDING))
+        {
+            current.angle.y = mMoveAngle;
+            shape_angle.y = mMoveAngle;
+        }
+
         if (checkZeroSpeedF()) {
             if (cLib_distanceAngleS(mMoveAngle, current.angle.y) > 0x7800 && checkInputOnR()) {
                 ret = procWaitTurnInit();
@@ -13294,13 +13311,30 @@ void daAlink_c::posMove() {
         mNormalSpeed = 0.0f;
     }
 
-    speedF = mNormalSpeed * (1.0f - fabsf(mSpeedModifier));
-
-    f32 mod = field_0x33a0 * (1.0f - field_0x2060->getOldFrameRate()) * mSpeedModifier;
-    if (speedF < 0.0f) {
-        speedF -= mod;
+    // VR first person (2026-09-28): skip the footstep-sync blend below and
+    // move at the plain mNormalSpeed ramp. mSpeedModifier crossfades speedF
+    // toward the planted foot's animated displacement (field_0x33a0) during
+    // walk<->run start/stop transitions, so per-tick movement pulsed with
+    // each footfall (captured on Quest: 0.9, 2.7, 4.7, 1.2, 3.5, 6.7... on a
+    // start; 7.4, 13.9, 4.6, 0.3 on a stop) -- invisible flatscreen, but with
+    // the VR camera anchored to current.pos it's felt as a lurch. The
+    // mNormalSpeed ramp itself is smooth (+1.9/tick up, -2.2/tick down).
+    // Feet may slide slightly during those transitions; the body is hidden
+    // in VR first person by default.
+    const bool vrSmoothSpeed = dusk::getSettings().game.vrSmoothStartStop.getValue() &&
+        dusk::vr::isRenderingToHeadset() &&
+        (dusk::vr::isVrFirstPerson(this) || dusk::vr::isWolfFirstPersonView(this));
+    if (vrSmoothSpeed) {
+        speedF = mNormalSpeed;
     } else {
-        speedF += mod;
+        speedF = mNormalSpeed * (1.0f - fabsf(mSpeedModifier));
+
+        f32 mod = field_0x33a0 * (1.0f - field_0x2060->getOldFrameRate()) * mSpeedModifier;
+        if (speedF < 0.0f) {
+            speedF -= mod;
+        } else {
+            speedF += mod;
+        }
     }
 
     if (getZoraSwim() && !checkZoraWearAbility()) {
@@ -19234,6 +19268,24 @@ int daAlink_c::execute() {
     // there can't drift onto two different definitions of "should the
     // body be forced to face the headset right now" -- see that shared
     // function's own comment for exactly why each state is excluded.
+    // VR first person (2026-09-29): play Link's own sounds (footsteps, voice,
+    // body/equipment SE) from the player's head. Otherwise they come from
+    // points on his hidden body -- feet, mouth, hip -- which sit off to one
+    // side of the head (e.g. footsteps land ahead in the direction of travel,
+    // i.e. to the side when looking sideways while running). Pointed at
+    // storage that vr::tick() updates every frame with the listener position,
+    // so they stay exactly centred; restored to his body otherwise.
+    {
+        using SoundPos = JGeometry::TVec3<f32>;
+        const bool vrEars = dusk::vr::isRenderingToHeadset() && dusk::vr::isVrFirstPerson(this);
+        SoundPos* listener = reinterpret_cast<SoundPos*>(dusk::vr::getVrListenerPosPtr());
+        mZ2Link.mSoundObjAnime.pos_ =
+            vrEars ? listener : reinterpret_cast<SoundPos*>(&current.pos);
+        mZ2Link.mSoundObjSimple1.pos_ = vrEars ? listener : reinterpret_cast<SoundPos*>(&eyePos);
+        mZ2Link.mSoundObjSimple2.pos_ =
+            vrEars ? listener : reinterpret_cast<SoundPos*>(&field_0x3720);
+    }
+
     if (dusk::vr::isRenderingToHeadset() && dusk::vr::isVrForcingBodyYawToHeadset(this)) {
         const s16 freshHeadYawS = dusk::vr::getHeadMoveAngleS();
         // ROOT CAUSE (found 2026-09-11 via a real debugger session):

@@ -35,6 +35,7 @@
 
 #if TARGET_PC
 #include "dusk/game_clock.h"
+#include "dusk/settings.h"
 #include "dusk/vr/vr_main.hpp"
 #if defined(_WIN32)
 #include <windows.h>  // not actually used in this file
@@ -497,6 +498,65 @@ void dKy_WolfPowerup_FogNearFar(f32* near_p, f32* far_p) {
     #endif
 }
 
+// VR (2026-09-28): the viewpoint camera-relative lighting is computed from.
+// Flatscreen: the game camera's lookat eye/center, exactly as before. In VR:
+// the headset eye and a smoothed headset-yaw direction -- see
+// dusk::vr::getVrLightingCamera(). Without this, lights attached to the
+// (invisible, in VR) flatscreen follow camera swung around as it re-oriented
+// behind Link, relighting the whole scene while moving.
+static cXyz dKy_light_eye(camera_class* camera_p) {
+    f32 eye[3], center[3];
+    if (dusk::vr::getVrLightingCamera(eye, center)) {
+        return cXyz(eye[0], eye[1], eye[2]);
+    }
+    return camera_p->view.lookat.eye;
+}
+
+static cXyz dKy_light_center(camera_class* camera_p) {
+    f32 eye[3], center[3];
+    if (dusk::vr::getVrLightingCamera(eye, center)) {
+        return cXyz(center[0], center[1], center[2]);
+    }
+    return camera_p->view.lookat.center;
+}
+
+// VR outdoor fill light direction (2026-09-28): unit vector from `from`
+// toward where the light should come from, per game.vrLightingMode:
+//  SunMoon: the scene's global light -- base_light, which SetBaseLight()
+//    points at the sun by day, the moon by night, or the area's own light
+//    position when the stage has no sun/moon.
+//  FollowLook: above and behind the player's look direction (smoothed yaw
+//    from dusk::vr::getVrLightingCamera(), ~1s delay), at
+//    kVrFollowLookLightElevationDeg -- the original "lit from the viewer's
+//    side" look, but from overhead instead of eye level.
+// Elevation is clamped to at least kVrFillLightMinElevationDeg either way,
+// so dawn/dusk (or a low area light) still light things from above.
+static cXyz dKy_vr_fill_light_dir(dScnKy_env_light_c* kankyo, const cXyz& from) {
+    constexpr f32 kVrFillLightMinElevationDeg = 25.0f;
+    constexpr f32 kVrFollowLookLightElevationDeg = 50.0f;
+    cXyz dir = kankyo->base_light.mPosition - from;
+    f32 eye[3], center[3];
+    if (dusk::getSettings().game.vrLightingMode.getValue() == dusk::VrLightingMode::FollowLook &&
+        dusk::vr::getVrLightingCamera(eye, center))
+    {
+        cXyz back(eye[0] - center[0], 0.0f, eye[2] - center[2]);
+        if (back.abs() > 0.001f) {
+            back = back.normZP();
+            const f32 el = DEG_TO_RAD(kVrFollowLookLightElevationDeg);
+            dir.set(back.x * cosf(el), sinf(el), back.z * cosf(el));
+        }
+    }
+    const f32 horiz = dir.absXZ();
+    const f32 minY = horiz * tanf(DEG_TO_RAD(kVrFillLightMinElevationDeg));
+    if (dir.y < minY) {
+        dir.y = minY;
+    }
+    if (dir.abs() < 0.001f) {
+        return cXyz(0.0f, 1.0f, 0.0f);
+    }
+    return dir.normZP();
+}
+
 void dKy_pos2_get_angle(cXyz* pos1_p, cXyz* pos2_p, s16* pitch_p, s16* yaw_p) {
     cXyz vec;
     vec = *pos1_p - *pos2_p;
@@ -516,12 +576,14 @@ void dKy_twi_wolflight_set(int light_id) {
 
     s16 angle_x;
     s16 angle_y;
-    dKy_pos2_get_angle(&camera_p->view.lookat.center, &camera_p->view.lookat.eye, &angle_x, &angle_y);
-    dKyr_get_vectle_calc(&camera_p->view.lookat.center, &camera_p->view.lookat.eye, &vectle);
+    cXyz light_eye = dKy_light_eye(camera_p);
+    cXyz light_center = dKy_light_center(camera_p);
+    dKy_pos2_get_angle(&light_center, &light_eye, &angle_x, &angle_y);
+    dKyr_get_vectle_calc(&light_center, &light_eye, &vectle);
 
-    kankyo->field_0x0c18[light_id].mPos.x = camera_p->view.lookat.eye.x + vectle.x * 300.0f;
-    kankyo->field_0x0c18[light_id].mPos.y = camera_p->view.lookat.eye.y + vectle.y * 300.0f;
-    kankyo->field_0x0c18[light_id].mPos.z = camera_p->view.lookat.eye.z + vectle.z * 300.0f;
+    kankyo->field_0x0c18[light_id].mPos.x = light_eye.x + vectle.x * 300.0f;
+    kankyo->field_0x0c18[light_id].mPos.y = light_eye.y + vectle.y * 300.0f;
+    kankyo->field_0x0c18[light_id].mPos.z = light_eye.z + vectle.z * 300.0f;
 
     int size = g_env_light.light_size;
     #if DEBUG
@@ -1717,9 +1779,10 @@ void dScnKy_env_light_c::setSunpos() {
         pos.y = cosf(DEG_TO_RAD(sun_angle)) * 80000.0f;
         pos.z = cosf(DEG_TO_RAD(sun_angle)) * -48000.0f;
 
-        sun_pos.x = camera_p->view.lookat.eye.x + pos.x;
-        sun_pos.y = camera_p->view.lookat.eye.y - pos.y;
-        sun_pos.z = camera_p->view.lookat.eye.z + pos.z;
+        const cXyz light_eye = dKy_light_eye(camera_p);
+        sun_pos.x = light_eye.x + pos.x;
+        sun_pos.y = light_eye.y - pos.y;
+        sun_pos.z = light_eye.z + pos.z;
 
         pos.x = sinf(DEG_TO_RAD(moon_angle)) * 80000.0f;
         pos.y = cosf(DEG_TO_RAD(moon_angle)) * 80000.0f;
@@ -3302,6 +3365,20 @@ void dScnKy_env_light_c::settingTevStruct_plightcol_plus(cXyz* pos_p, dKy_tevstr
                 J3DLightInfo* light0_info = tevstr_p->mLights[0].getLightInfo();
                 sp9 = 1;
 
+                if (dusk::vr::isRenderingToHeadset() &&
+                    dusk::getSettings().game.vrLightingMode.getValue() != dusk::VrLightingMode::Original)
+                {
+                    // VR: shine from the sun/moon, or from above your delayed
+                    // look direction (see dKy_vr_fill_light_dir())
+                    // at the same distances the camera version uses, instead
+                    // of from the camera -- fixed in the world, so neither
+                    // head movement nor Link's movement relights the scene.
+                    light_pos = *pos_p + (dKy_vr_fill_light_dir(kankyo, *pos_p) * 500.0f);
+                    if (tevstr_p->Type >= 1 && tevstr_p->Type <= 9) {
+                        const cXyz light_eye = dKy_light_eye(camera);
+                        light_pos = light_eye + (dKy_vr_fill_light_dir(kankyo, light_eye) * 180.0f);
+                    }
+                } else {
                 dKyr_get_vectle_calc(&camera->view.lookat.center, &camera->view.lookat.eye, &camfwd);
                 light_pos = *pos_p + (camfwd * 500.0f);
                 light_pos.y += 40.0f;
@@ -3313,6 +3390,7 @@ void dScnKy_env_light_c::settingTevStruct_plightcol_plus(cXyz* pos_p, dKy_tevstr
                 if (tevstr_p->Type >= 1 && tevstr_p->Type <= 9) {
                     dKyr_get_vectle_calc(&camera->view.lookat.center, &camera->view.lookat.eye, &camfwd);
                     light_pos = camera->view.lookat.eye + (camfwd * 180.0f);
+                }
                 }
 
                 field_0x10f8.r = light0_info->mColor.r;
@@ -3760,7 +3838,8 @@ void dScnKy_env_light_c::settingTevStruct(int tevstrType, cXyz* pos_p, dKy_tevst
 
         fog_near = 30000.0f;
         fog_far = 30000.0f;
-        dKyr_get_vectle_calc(&pos, &camera_p->view.lookat.eye, &calc_pos);
+        cXyz light_eye = dKy_light_eye(camera_p);
+        dKyr_get_vectle_calc(&pos, &light_eye, &calc_pos);
 
         for (int i = 0; i < 6; i++) {
             J3DLightInfo& light_info = *tevstr_p->mLights[i].getLightInfo();
@@ -3849,9 +3928,10 @@ void dScnKy_env_light_c::settingTevStruct(int tevstrType, cXyz* pos_p, dKy_tevst
         Vec sp8C;
         Vec sp80;
 
-        sp80.x = camera_p->view.lookat.eye.x;
-        sp80.y = camera_p->view.lookat.eye.y;
-        sp80.z = camera_p->view.lookat.eye.z;
+        const cXyz eye_light_pos = dKy_light_eye(camera_p);
+        sp80.x = eye_light_pos.x;
+        sp80.y = eye_light_pos.y;
+        sp80.z = eye_light_pos.z;
 
         light_info = tevstr_p->mLightObj.getLightInfo();
         cMtx_multVec(view_mtx, &sp80, &sp8C);
@@ -4001,9 +4081,10 @@ void dScnKy_env_light_c::settingTevStruct(int tevstrType, cXyz* pos_p, dKy_tevst
         Vec sp74;
         Vec sp68;
 
-        sp68.x = camera_p->view.lookat.eye.x;
-        sp68.y = camera_p->view.lookat.eye.y;
-        sp68.z = camera_p->view.lookat.eye.z;
+        const cXyz light_eye = dKy_light_eye(camera_p);
+        sp68.x = light_eye.x;
+        sp68.y = light_eye.y;
+        sp68.z = light_eye.z;
 
         light_info = tevstr_p->mLightObj.getLightInfo();
         cMtx_multVec(view_mtx, &sp68, &sp74);
@@ -4721,7 +4802,7 @@ void dScnKy_env_light_c::SetBaseLight() {
         if (daytime > 67.5f && daytime < 292.5f) {
             base_light.mPosition = kankyo->sun_light_pos;
         } else if (camera != NULL) {
-            base_light.mPosition = camera->view.lookat.eye + kankyo->moon_pos;
+            base_light.mPosition = dKy_light_eye(camera) + kankyo->moon_pos;
         } else {
             base_light.mPosition = kankyo->moon_pos;
         }

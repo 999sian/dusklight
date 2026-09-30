@@ -609,6 +609,64 @@ s16 getHeadMoveAngleS() {
     return g_headMoveAngleS;
 }
 
+// Backing state for getVrLightingCamera() (vr_main.hpp). Updated once per
+// real frame in tick(), right after the camera eye anchor is computed.
+// kVrLightYawTimeConstantSec: how long the fill light takes to follow a new
+// head direction (~63% of the way after this long). Longer = calmer.
+static constexpr float kVrLightYawTimeConstantSec = 1.0f;
+static bool g_vrLightCamValid = false;
+static float g_vrLightEye[3] = {0.f, 0.f, 0.f};
+static float g_vrLightYawRad = 0.f;
+
+static bool g_vrAudioValid = false;
+static Mtx g_vrAudioViewMtx;
+static float g_vrAudioEye[3] = {0.f, 0.f, 0.f};
+static float g_vrAudioCenter[3] = {0.f, 0.f, 0.f};
+static float g_vrListenerPos[3] = {0.f, 0.f, 0.f};
+
+float* getVrListenerPosPtr() {
+    return g_vrListenerPos;
+}
+
+bool getVrAudioListener(float (*outViewMtx)[4], float outEye[3], float outCenter[3]) {
+    if (!g_vrAudioValid || !isRenderingToHeadset()) {
+        return false;
+    }
+    std::memcpy(outViewMtx, g_vrAudioViewMtx, sizeof(Mtx));
+    for (int i = 0; i < 3; ++i) {
+        outEye[i] = g_vrAudioEye[i];
+        outCenter[i] = g_vrAudioCenter[i];
+    }
+    return true;
+}
+
+bool getVrViewEye(float outEye[3]) {
+    if (!g_vrLightCamValid || !isRenderingToHeadset()) {
+        return false;
+    }
+    for (int i = 0; i < 3; ++i) {
+        outEye[i] = g_vrLightEye[i];
+    }
+    return true;
+}
+
+bool getVrLightingCamera(float outEye[3], float outCenter[3]) {
+    if (!g_vrLightCamValid || !isRenderingToHeadset() ||
+        getSettings().game.vrLightingMode.getValue() == VrLightingMode::Original) {
+        return false;
+    }
+    // Same yaw convention as current.angle.y / mMoveAngle: 0 faces +Z,
+    // positive turns toward +X. 1000 units is arbitrary -- callers only
+    // use the eye->centre direction.
+    for (int i = 0; i < 3; ++i) {
+        outEye[i] = g_vrLightEye[i];
+    }
+    outCenter[0] = g_vrLightEye[0] + 1000.f * std::sin(g_vrLightYawRad);
+    outCenter[1] = g_vrLightEye[1];
+    outCenter[2] = g_vrLightEye[2] + 1000.f * std::cos(g_vrLightYawRad);
+    return true;
+}
+
 // Physical sword (game.vrPhysicalSword): true while the sword hand is moving
 // fast enough to count as a swing. Updated once per real frame in tick();
 // read once per sim tick by daAlink_c::setAtCollision() to arm the sword's
@@ -2224,11 +2282,33 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         // a cutscene first-person instead (isVrFirstPerson() true there),
         // matching this whole mechanism's original "plain first-person VR
         // is completely untouched" design intent.
+        // EXTENDED 2026-09-29 (game.vrCutsceneFaceCamera, default on): covers
+        // every event where the view follows the game's camera (third-person
+        // fallback during any event -- real cutscenes, and e.g. events where
+        // Link isn't drawn), not just isRealCutsceneRunning(); and on the
+        // way back out, snaps to Link's facing so gameplay resumes looking
+        // where he faces. The setting off disables all of this block.
+        const bool faceCutsceneCamera = dusk::getSettings().game.vrCutsceneFaceCamera.getValue();
+        auto* cutsceneLink = static_cast<daAlink_c*>(dComIfGp_getLinkPlayer());
         bool cutsceneActive = false;
-        if (dusk::vr::isRealCutsceneRunning()) {
-            if (auto* link = static_cast<daAlink_c*>(dComIfGp_getLinkPlayer())) {
-                cutsceneActive = !dusk::vr::isVrFirstPerson(link);
-            }
+        if (faceCutsceneCamera && cutsceneLink != nullptr) {
+            const bool eventCamera = cutsceneLink->checkEventRun() &&
+                                     !dusk::vr::isVrFirstPerson(cutsceneLink) &&
+                                     !dusk::vr::isWolfFirstPersonView(cutsceneLink);
+            cutsceneActive = eventCamera ||
+                             (dusk::vr::isRealCutsceneRunning() &&
+                              !dusk::vr::isVrFirstPerson(cutsceneLink));
+        }
+
+        if (!cutsceneActive && s_cutsceneJumpCutWasActive && faceCutsceneCamera &&
+            cutsceneLink != nullptr)
+        {
+            // Event just ended: face the way Link faces.
+            const cXyz currentHeadForward = vr_render::computeHeadWorldForward(
+                hmdPose, dusk::vr::getSmoothTurnYawRad());
+            const s16 currentYawS = cM_atan2s(currentHeadForward.x, currentHeadForward.z);
+            dusk::vr::snapScriptedCameraYaw(
+                cM_s2rad(static_cast<s16>(cutsceneLink->shape_angle.y - currentYawS)));
         }
 
         if (cutsceneActive) {
@@ -2534,6 +2614,45 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     // HMD sample this session.
     const cXyz vrCameraEyeAnchor = vr_link::getVrCameraEyeAnchor(
         currentView->lookat.eye, &hmdPose.position, dusk::vr::getSmoothTurnYawRad());
+
+    // Lighting viewpoint -- see getVrLightingCamera(). Exponential ease of
+    // the head yaw toward its current value, frame-rate independent.
+    {
+        constexpr float kBamsToRad = 3.14159265f / 32768.0f;
+        const float headYawRad = static_cast<float>(g_headMoveAngleS) * kBamsToRad;
+        if (!g_vrLightCamValid) {
+            g_vrLightYawRad = headYawRad;
+        } else {
+            float delta = headYawRad - g_vrLightYawRad;
+            delta = std::remainder(delta, 2.f * 3.14159265f);  // shortest way round
+            const float blend =
+                1.f - std::exp(-static_cast<float>(pacing.dt) / kVrLightYawTimeConstantSec);
+            g_vrLightYawRad = std::remainder(g_vrLightYawRad + delta * blend, 2.f * 3.14159265f);
+        }
+        g_vrLightEye[0] = vrCameraEyeAnchor.x;
+        g_vrLightEye[1] = vrCameraEyeAnchor.y;
+        g_vrLightEye[2] = vrCameraEyeAnchor.z;
+        g_vrLightCamValid = true;
+    }
+
+    // Audio listener -- see getVrAudioListener(). Head-centre view, same
+    // construction as beginStereoPass()'s V_c.
+    {
+        const float yaw = dusk::vr::getSmoothTurnYawRad();
+        vr_render::eyePoseToViewMtx(g_vrAudioViewMtx, hmdPose, hmdPose.position,
+                                    vrCameraEyeAnchor, vr_render::kEyePosScale, yaw);
+        const cXyz fwd = vr_render::computeHeadWorldForward(hmdPose, yaw);
+        g_vrAudioEye[0] = vrCameraEyeAnchor.x;
+        g_vrAudioEye[1] = vrCameraEyeAnchor.y;
+        g_vrAudioEye[2] = vrCameraEyeAnchor.z;
+        g_vrAudioCenter[0] = vrCameraEyeAnchor.x + fwd.x * 100.f;
+        g_vrAudioCenter[1] = vrCameraEyeAnchor.y + fwd.y * 100.f;
+        g_vrAudioCenter[2] = vrCameraEyeAnchor.z + fwd.z * 100.f;
+        g_vrListenerPos[0] = vrCameraEyeAnchor.x;
+        g_vrListenerPos[1] = vrCameraEyeAnchor.y;
+        g_vrListenerPos[2] = vrCameraEyeAnchor.z;
+        g_vrAudioValid = true;
+    }
 
     // --- locate both eyes for this frame ---
     XrViewLocateInfo locateInfo{XR_TYPE_VIEW_LOCATE_INFO};
@@ -3286,6 +3405,35 @@ void submitFrame() {
 
     if (XR_FAILED(xrEndFrame(g_session->session(), &endInfo))) {
         duskVrLog("[dusk::vr::submitFrame] FAILED: xrEndFrame\n");
+    }
+
+    // Model-replay cost (dusk::interp::material::replay_models_for_current_view,
+    // the per-view lighting re-aim): averaged per frame, logged every ~2s.
+    {
+        static int s_replayFrames = 0;
+        static double s_replayMs = 0.0, s_replayMaxMs = 0.0;
+        static int s_replayModels = 0, s_replayPasses = 0, s_recorded = 0;
+        static double s_recordMs = 0.0;
+        const auto stats = dusk::interp::material::take_replay_stats();
+        ++s_replayFrames;
+        s_replayMs += stats.ms;
+        s_replayMaxMs = std::max(s_replayMaxMs, stats.ms);
+        s_replayModels += stats.models;
+        s_replayPasses += stats.passes;
+        s_recordMs += stats.recordMs;
+        s_recorded += stats.recorded;
+        if (s_replayFrames >= 144) {
+            char msg[200];
+            duskVrSnprintf(msg, sizeof(msg),
+                "[dusk::vr::replayperf] frames=%d avgMs=%.3f maxMs=%.3f "
+                "modelsPerFrame=%.1f passesPerFrame=%.2f recordMsPerFrame=%.3f recordedPerFrame=%.1f\n",
+                s_replayFrames, s_replayMs / s_replayFrames, s_replayMaxMs,
+                double(s_replayModels) / s_replayFrames, double(s_replayPasses) / s_replayFrames,
+                s_recordMs / s_replayFrames, double(s_recorded) / s_replayFrames);
+            duskVrLog(msg);
+            s_replayFrames = s_replayModels = s_replayPasses = s_recorded = 0;
+            s_replayMs = s_replayMaxMs = s_recordMs = 0.0;
+        }
     }
 
     // TEMP DIAGNOSTIC -- see the comment block above tick(). Log on a dip,

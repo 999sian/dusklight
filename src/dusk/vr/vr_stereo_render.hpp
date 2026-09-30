@@ -70,6 +70,7 @@ wgpu::Texture ensure_external_copy_texture(const void* dest, uint32_t width, uin
 }
 
 #include "dusk/vr/vr_smooth_turn.hpp"  // dusk::vr::rotateYawXr/rotateYawQuat
+#include "dusk/interp/material.h"     // replay_models_for_current_view()
 #include "d/d_com_inf_game.h"      // dComIfGd_getView()
 #include "d/d_stage.h"             // dStage_stagInfo_GetCullPoint() -- beginEye() cull far
 #include "f_op/f_op_view.h"        // view_class, lookat_class, Mtx44, Mtx
@@ -424,6 +425,9 @@ inline aurora::gfx::ResolvedTargets beginEye(const EyeParams& eye) {
     eyePoseToViewMtx(view->viewMtx, eye.pose, eye.hmdRefPos, eye.eyeAnchor,
                       kEyePosScale, eye.smoothTurnYawRad);
     j3dSys.setViewMtx(view->viewMtx);
+    // Re-aim replayed models' view-relative lights at this eye (see
+    // replay_models_for_current_view()'s comment, 2026-09-29).
+    dusk::interp::material::replay_models_for_current_view();
 
     // Inverse view for anything that needs world-from-view (shadow maps, etc.)
     // MTXInverse is the GC SDK equivalent of cMtx_inverse used in the original.
@@ -692,6 +696,10 @@ inline aurora::gfx::ResolvedTargets beginStereoPass(const StereoParams& sp,
                       kEyePosScale, sp.smoothTurnYawRad);
     j3dSys.setViewMtx(view->viewMtx);
     MTXInverse(view->viewMtx, view->invViewMtx);
+    // Re-aim replayed models' view-relative lights at the head-centre view
+    // (see replay_models_for_current_view()'s comment, 2026-09-29). Lights
+    // then differ per eye only by the IPD offset, which is negligible.
+    dusk::interp::material::replay_models_for_current_view();
 
     // Per-eye correction T_eye = V_eye * V_c^-1 (Mtx = 3x4 affine, so the
     // product is exact) and per-eye 6-parameter projections, all shipped

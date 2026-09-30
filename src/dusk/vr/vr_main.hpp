@@ -329,6 +329,41 @@ float getSmoothTurnYawRad();
 // relationship to where the player's head is actually turned in VR.
 s16 getHeadMoveAngleS();
 
+// Viewpoint for the base game's camera-relative lighting (d_kankyo.cpp's
+// dKy_light_eye()/dKy_light_center(), 2026-09-28). The kankyo code places
+// several lights relative to dComIfGp_getCamera(0)'s lookat eye/center --
+// most importantly settingTevStruct()'s outdoor fill light, which shines on
+// every object from the camera's side. In VR that camera is the invisible
+// flatscreen follow camera, which swings around behind Link as he moves, so
+// the whole scene relit with it. This gives the VR eye position instead,
+// plus a centre point along the HEADSET's yaw, smoothed over about a second
+// (level, no pitch) so glancing around doesn't relight anything. Returns
+// false outside VR rendering, or with game.vrLightingMode = Original; callers
+// then keep using the game camera.
+// Plain floats rather than cXyz, same header-layering reason as above.
+bool getVrLightingCamera(float outEye[3], float outCenter[3]);
+
+// World-space VR camera eye (the headset's anchor this frame), for things
+// the base game centres on the camera eye -- sky dome, cloud layer, sun
+// sprite (2026-09-29). Unlike getVrLightingCamera() this ignores the
+// lighting mode. Returns false outside VR rendering.
+bool getVrViewEye(float outEye[3]);
+
+// Audio listener pose for this frame, from the headset (2026-09-29): the
+// head-centre view matrix (3x4, same form as view_class::viewMtx), the eye
+// position, and a point along the head's forward direction. Used by
+// Z2Audience::setAudioCamera() to replace the flatscreen chase camera as the
+// sound listener in VR -- otherwise positional sounds come from directions
+// relative to a camera that isn't where the player's head is. Returns false
+// outside VR rendering.
+bool getVrAudioListener(float (*outViewMtx)[4], float outEye[3], float outCenter[3]);
+
+// Persistent storage (x, y, z) that tracks the audio listener's position
+// every frame -- stable address for the lifetime of the process, so sound
+// objects can follow it by pointer. Used to play Link's own sounds from the
+// player's head in first-person VR (daAlink_c, 2026-09-29).
+float* getVrListenerPosPtr();
+
 // Physical sword (game.vrPhysicalSword): true while the sword hand is moving
 // fast enough to count as a swing (same speed the swing gesture fires at).
 bool isPhysicalSwordSwingActive();
