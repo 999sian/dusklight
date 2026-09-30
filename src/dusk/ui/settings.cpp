@@ -992,6 +992,15 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                             "Show Link's Body\" below if it's off), since there's no point "
                             "being in third person with an invisible avatar. Off by default."
             });
+        config_bool_select(leftPane, rightPane, getSettings().game.vrThirdPersonFollowCameraYaw,
+            {
+                .key = "Turn With Game Camera",
+                .helpText = "Third Person only. When the game's own camera swings left or "
+                            "right (for example following Link as he runs), your view turns "
+                            "with it. You can still look anywhere with the headset. On by "
+                            "default.",
+                .isDisabled = [] { return !getSettings().game.vrThirdPerson.getValue(); },
+            });
         // "Attach Body Rotation to Headset" (game.vrAttachBodyRotationToHead) is
         // intentionally not exposed here -- still a real ConfigVar, editable
         // directly in the config file, but now DEFAULTS TO FALSE (disabled).

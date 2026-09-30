@@ -787,6 +787,17 @@ void dCamera_c::updatePad() {
 
         var_f30 = mDoCPd_c::getSubStickY(mPadID);
         var_f29 = mDoCPd_c::getSubStickValue(mPadID);
+
+        #if TARGET_PC
+        // VR: the C-stick's horizontal axis drives VR smooth/snap turn instead
+        // (vr_main.cpp reads it directly). Don't also let it orbit the game
+        // camera -- in third person the VR view sits on that camera, so the
+        // orbit moved the view around Link instead of just rotating it.
+        if (dusk::vr::isRenderingToHeadset()) {
+            var_f31 = 0.0f;
+            var_f29 = std::fabs(var_f30);
+        }
+        #endif
     }
 
     mPadInfo.mCStick.mPosXDelta = var_f31 - mPadInfo.mCStick.mLastPosX;

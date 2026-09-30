@@ -15043,3 +15043,46 @@ combo with finisher kept (user choice). `[dusk::vr::physsword]` logging and
 `logPhysicalSwordCut()`/`vrCutTypeName()` removed. Retune knobs if ever
 needed: arm/disarm speeds (2.2 / 1.5 m/s, vr_main.cpp tick() physical-sword
 block) and `kVrStabDominance` (d_a_alink.cpp).
+
+### Real gamepad C-stick orbited the third-person VR camera around Link — CONFIRMED FIXED IN-HEADSET 2026-09-29
+
+**Symptom** (user): in Third Person with a real controller, the right stick
+moves the camera around Link instead of just rotating it, even with Free
+Camera off. **Cause**: since 2026-08-19 the real C-stick's X axis feeds VR
+smooth/snap turn (`vr_main.cpp` reads `mDoCPd_c::getSubStickX` directly),
+but the base game's own camera (`dCamera_c::updatePad()`, `d_camera.cpp`)
+still read the same axis into `mPadInfo.mCStick` and orbited the flatscreen
+camera. Third Person anchors the VR view position to that camera, so the
+orbit moved the view around Link. Free Camera (`freeCamera()`) reads the
+same `mPadInfo.mCStick`, so it did it too when enabled.
+**Fix**: in `updatePad()`, while `isRenderingToHeadset()`, the camera's
+C-stick X is zeroed (and its value set to |Y|). Turning is unaffected
+(it reads the pad directly). C-stick Y is untouched (C-up first-person
+look etc.).
+**Build note**: a bad batch script ran a CMake regenerate without the MSVC
+environment and wiped the cache's settings; reconfigured with
+`cmake --preset windows-msvc-relwithdebinfo -DCMAKE_PREFIX_PATH=C:/vcpkg/installed/x64-windows -DDUSK_GFX_DEBUG_GROUPS=ON`,
+then a full rebuild. THAT WAS NOT ENOUGH: the failed regenerate had cached EMPTY CMAKE_CXX_FLAGS/_RELWITHDEBINFO (no /EHsc, no /O2, no debug info), which a plain reconfigure keeps -- the resulting exe crashed at startup with std::system_error (C4530 warnings in the build log were the tell; stale .pdb + 'cannot determine the running image's build id' too). Real fix: delete build/windows-msvc-relwithdebinfo/CMakeCache.txt and CMakeFiles/, then the reconfigure command above, then a full rebuild.
+
+### "Turn With Game Camera" (Third Person only, default ON) — CONFIRMED WORKING IN-HEADSET 2026-09-29 ("this works"; no runaway-spin report)
+
+Per user request: in Third Person, the view should rotate left/right WITH
+the flatscreen game camera while the headset still looks anywhere.
+`game.vrThirdPersonFollowCameraYaw` (settings.h/.cpp, default true), VR tab
+toggle "Turn With Game Camera" right after "Third Person" (greyed out when
+Third Person is off). `vr_main.cpp` tick(), new block BEFORE the cutscene
+jump-cut / Z-target blocks: each frame, the flatscreen camera's yaw delta
+(`cM_atan2s(center-eye)`, same convention as the other assist blocks) is
+added via `snapScriptedCameraYaw()` -- relative, never absolute, so no lock.
+Skipped when not third person (`isVrFirstPerson`, so the clawshot
+first-person carve-out is excluded), during real cutscenes (jump-cut block
+owns those), and for any single-frame delta >= the 25-degree jump-cut
+threshold (room loads/camera resets). Z-target's absolute snaps run after
+it and override on frames they fire; after Z-target settles, this keeps
+following the camera as it circles the target.
+**Risk to watch**: a feedback loop. Movement direction follows the VR view
+(`getHeadMoveAngleS` includes smooth-turn yaw), and the game camera swings
+toward Link's travel direction, so running at an angle to the game camera
+will keep turning the view -- same as vanilla's stick-held-diagonal
+circling, but check it doesn't feel like runaway spinning. Likely worse if
+"Attach Body Rotation to Headset" (hidden, default off) is turned on.

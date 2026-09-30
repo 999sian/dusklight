@@ -2127,6 +2127,61 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     // converges to this same frame rather than reading a one-frame-stale
     // value.
 
+    // --- Third Person: turn with the game camera ---
+    //
+    // "game.vrThirdPersonFollowCameraYaw" (default on). Each frame, the
+    // flatscreen camera's own yaw CHANGE since last frame is added to the
+    // smooth-turn yaw -- a relative nudge, never an absolute lock, so the
+    // headset still looks anywhere on top of it. Runs BEFORE the cutscene/
+    // Z-target blocks below: those snap to an absolute direction, so on a
+    // frame where they fire they simply override this. A single-frame change
+    // larger than the jump-cut threshold is treated as a cut/warp (room load,
+    // camera reset) and ignored rather than spun through. Cutscenes are left
+    // to the jump-cut block. C-stick orbit input never reaches the game
+    // camera in VR (dCamera_c::updatePad()), so every delta here is the
+    // camera's own follow/scripted movement, not the player's stick.
+    {
+        static bool s_followWasActive = false;
+        static s16 s_followLastCamYawS = 0;
+
+        bool followActive = false;
+        if (dusk::getSettings().game.vrThirdPerson.getValue() &&
+            dusk::getSettings().game.vrThirdPersonFollowCameraYaw.getValue() &&
+            !dusk::vr::isRealCutsceneRunning())
+        {
+            if (auto* link = static_cast<daAlink_c*>(dComIfGp_getLinkPlayer())) {
+                followActive = !dusk::vr::isVrFirstPerson(link);
+            }
+        }
+
+        bool haveYaw = false;
+        s16 camYawS = 0;
+        if (followActive) {
+            if (view_class* view = dComIfGd_getView()) {
+                const float dx = view->lookat.center.x - view->lookat.eye.x;
+                const float dz = view->lookat.center.z - view->lookat.eye.z;
+                if (std::abs(dx) > 0.0001f || std::abs(dz) > 0.0001f) {
+                    camYawS = cM_atan2s(dx, dz);
+                    haveYaw = true;
+                }
+            }
+        }
+
+        if (haveYaw) {
+            if (s_followWasActive) {
+                const s16 deltaS = static_cast<s16>(camYawS - s_followLastCamYawS);
+                const float deltaRad = cM_s2rad(deltaS);
+                if (std::abs(deltaRad) <
+                    cM_s2rad(cM_deg2s(dusk::vr::kScriptedCameraJumpCutThresholdDeg)))
+                {
+                    dusk::vr::snapScriptedCameraYaw(deltaRad);
+                }
+            }
+            s_followLastCamYawS = camYawS;
+        }
+        s_followWasActive = haveYaw;
+    }
+
     // --- Cutscenes: jump-cut detection only ---
     //
     // REDESIGNED 2026-08-19 after two rejected continuous-pull attempts --

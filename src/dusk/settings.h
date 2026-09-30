@@ -333,6 +333,11 @@ struct UserSettings {
         // option that shows link's body and puts the entire game in third
         // person").
         ConfigVar<bool> vrThirdPerson;
+        // Third Person only: each frame, the flatscreen game camera's own yaw
+        // change is added to the VR smooth-turn yaw, so the view turns WITH
+        // the game camera while the headset still looks around freely on top.
+        // Default on.
+        ConfigVar<bool> vrThirdPersonFollowCameraYaw;
         // Attaches Link's body rotation to the headset's own yaw. Without
         // this, current.angle.y/shape_angle.y (daAlink_c::
         // setSpeedAndAngleNormal(), d_a_alink.cpp) only ease toward
