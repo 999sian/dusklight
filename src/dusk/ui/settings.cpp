@@ -964,16 +964,6 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                             "is tunable in Debug > Graphics Settings. On by default."
             });
 
-        config_bool_select(leftPane, rightPane, getSettings().game.vrStableCamera,
-            {
-                .key = "Stable First-Person Camera",
-                .helpText = "Anchors the first-person camera to Link's actual position only, "
-                            "so his running, turning and idle animations don't move your view. "
-                            "Also applies while swimming, crawling, climbing vines and talking "
-                            "(height eases between stances instead of bobbing). Off restores "
-                            "the original camera, which leans forward along Link's body while "
-                            "running. On by default."
-            });
         config_bool_select(leftPane, rightPane, getSettings().game.vrSmoothStartStop,
             {
                 .key = "Smooth Start/Stop",

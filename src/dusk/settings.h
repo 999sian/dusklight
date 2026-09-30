@@ -552,15 +552,10 @@ struct UserSettings {
         ConfigVar<int> vrSnapTurnAngle;
         // First-person comfort tweaks (2026-09-28), all default ON; off
         // restores the original TPVR behaviour for comparison.
-        //  vrStableCamera: camera anchored to Link's physics position only --
-        //    no facing-relative neck nudge, no one-tick-ahead extrapolation,
-        //    and swimming/crawling/vines/dialogue use position + smoothed
-        //    height instead of the animated head (vr_link_visibility.hpp).
         //  vrSmoothStartStop: move at the plain speed ramp instead of the
         //    footstep-synced speed (daAlink_c::posMove()).
         //  vrInstantStartFacing: face the push direction immediately when
         //    starting from a standstill (daAlink_c::checkNextAction()).
-        ConfigVar<bool> vrStableCamera;
         ConfigVar<bool> vrSmoothStartStop;
         ConfigVar<bool> vrInstantStartFacing;
         ConfigVar<VrLightingMode> vrLightingMode;

@@ -144,6 +144,7 @@ BOOL daAlink_c::setBodyAngleToCamera() {
             // controller-pointing aim stays the default there.
             if (dusk::getSettings().game.vrThirdPerson.getValue()) {
                 dusk::vr::getHeadAimAngles(&aimYawS, &aimPitchS);
+                dusk::vr::noteHeadDrivenAim();
             } else {
                 dusk::vr::getControllerAimAngles(&aimYawS, &aimPitchS);
             }

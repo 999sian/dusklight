@@ -15086,3 +15086,36 @@ toward Link's travel direction, so running at an angle to the game camera
 will keep turning the view -- same as vanilla's stick-held-diagonal
 circling, but check it doesn't feel like runaway spinning. Likely worse if
 "Attach Body Rotation to Headset" (hidden, default off) is turned on.
+
+### PR #10 (danieltobey, "VR comfort, lighting and audio fixes") merged WITHOUT its Stable First-Person Camera — 2026-09-29, uncommitted, PC build clean, NOT yet tested in-headset
+
+`git merge --no-commit --no-ff pr-10` onto main (after de73d7dc0f), no text
+conflicts. Per user request the "Stable First-Person Camera"
+(`vrStableCamera`) was stripped: `vr_link_visibility.hpp` restored to main's
+version entirely (the PR's only changes there were that feature: removed
+3in/6in hunch nudge, extrapolation gain 0, stance-height anchor for
+swim/vine/crawl/water-walk/dialogue), and its ConfigVar/registration/menu
+entry removed. Everything else from the PR is in: Smooth Start/Stop,
+Instant Start Facing, Face Cutscene Camera (widened event snapping + snap
+to Link's facing on event end -- author marked NOT tested; interacts with
+Turn With Game Camera in Third Person), per-view model lighting + Lighting
+mode + Accurate Object Lighting + Sun Glare Dimming (off), headset-centred
+sky/clouds/sun, headset audio listener + Link's sounds at the head,
+Android debug builds as `com.joeyaw.tpvr.dev`. The `[dusk::vr::replayperf]` log (every ~2s) was removed same day; submitFrame() still calls `take_replay_stats()` once per frame purely to reset the counters.
+PR was never compiled on Windows by its author; it compiles clean here.
+
+### Third Person aiming spun the camera — "Turn With Game Camera" feedback loop — CONFIRMED FIXED IN-HEADSET 2026-09-29
+
+Third Person aim sets `shape_angle.y` from the HMD yaw (`setBodyAngleToCamera()`
+VR branch, `getHeadAimAngles()`); the aim/subject flatscreen camera turns with
+Link's facing; "Turn With Game Camera" added that camera turn back onto the
+smooth-turn yaw -> head yaw grows -> Link turns more -> runaway spin (the risk
+the feature's own section warned about). Fix: `setBodyAngleToCamera()` calls
+`dusk::vr::noteHeadDrivenAim()` whenever it drives facing from the headset;
+the follow block in `vr_main.cpp` skips while `isHeadDrivenAimActive()`
+(0.15s window, counted down per real frame, > one sim tick). The follow
+baseline resets when it pauses, so resuming after aiming doesn't jump.
+Covers every aim/subject-look item (bow, slingshot, hookshot, boomerang,
+Dominion Rod, first-person look) since they all go through that function.
+If the same loop shows up elsewhere, the same flag is the pattern: anything
+that sets Link's facing from the headset in Third Person must pause the follow.

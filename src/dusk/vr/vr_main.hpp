@@ -402,6 +402,13 @@ void getControllerAimAngles(s16* outYawS, s16* outPitchS);
 // controller-pointing aim has no first-person view to visually anchor to.
 void getHeadAimAngles(s16* outYawS, s16* outPitchS);
 
+// Called by setBodyAngleToCamera() each sim tick it sets Link's facing from
+// the headset (Third Person aiming). "Turn With Game Camera" pauses while
+// this was called recently: the aim camera turns with Link, so feeding its
+// yaw back into the view would spin in a loop.
+void noteHeadDrivenAim();
+bool isHeadDrivenAimActive();
+
 // Thin forward to vr_link::isFirstPerson(link) (vr_link_visibility.hpp) --
 // same "keep the heavier OpenXR/aurora header out of core game files"
 // reasoning as every other function in this header. Added 2026-08-19 for

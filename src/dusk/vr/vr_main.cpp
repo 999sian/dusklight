@@ -687,6 +687,20 @@ void getControllerAimAngles(s16* outYawS, s16* outPitchS) {
     *outPitchS = g_controllerAimPitchS;
 }
 
+// Seconds left in the "head-driven aim is active" window; set by
+// noteHeadDrivenAim() (sim-tick rate) and counted down in tick(). Longer
+// than a sim tick so it never drops out between ticks.
+static float g_headDrivenAimRemainingSec = 0.f;
+static constexpr float kHeadDrivenAimHoldSec = 0.15f;
+
+void noteHeadDrivenAim() {
+    g_headDrivenAimRemainingSec = kHeadDrivenAimHoldSec;
+}
+
+bool isHeadDrivenAimActive() {
+    return g_headDrivenAimRemainingSec > 0.f;
+}
+
 void getHeadAimAngles(s16* outYawS, s16* outPitchS) {
     *outYawS = g_headMoveAngleS;
     *outPitchS = g_headAimPitchS;
@@ -2202,10 +2216,15 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         static bool s_followWasActive = false;
         static s16 s_followLastCamYawS = 0;
 
+        // Count down the head-driven-aim window (see noteHeadDrivenAim()).
+        if (g_headDrivenAimRemainingSec > 0.f) {
+            g_headDrivenAimRemainingSec -= static_cast<float>(pacing.dt);
+        }
+
         bool followActive = false;
         if (dusk::getSettings().game.vrThirdPerson.getValue() &&
             dusk::getSettings().game.vrThirdPersonFollowCameraYaw.getValue() &&
-            !dusk::vr::isRealCutsceneRunning())
+            !dusk::vr::isRealCutsceneRunning() && !dusk::vr::isHeadDrivenAimActive())
         {
             if (auto* link = static_cast<daAlink_c*>(dComIfGp_getLinkPlayer())) {
                 followActive = !dusk::vr::isVrFirstPerson(link);
@@ -3407,34 +3426,9 @@ void submitFrame() {
         duskVrLog("[dusk::vr::submitFrame] FAILED: xrEndFrame\n");
     }
 
-    // Model-replay cost (dusk::interp::material::replay_models_for_current_view,
-    // the per-view lighting re-aim): averaged per frame, logged every ~2s.
-    {
-        static int s_replayFrames = 0;
-        static double s_replayMs = 0.0, s_replayMaxMs = 0.0;
-        static int s_replayModels = 0, s_replayPasses = 0, s_recorded = 0;
-        static double s_recordMs = 0.0;
-        const auto stats = dusk::interp::material::take_replay_stats();
-        ++s_replayFrames;
-        s_replayMs += stats.ms;
-        s_replayMaxMs = std::max(s_replayMaxMs, stats.ms);
-        s_replayModels += stats.models;
-        s_replayPasses += stats.passes;
-        s_recordMs += stats.recordMs;
-        s_recorded += stats.recorded;
-        if (s_replayFrames >= 144) {
-            char msg[200];
-            duskVrSnprintf(msg, sizeof(msg),
-                "[dusk::vr::replayperf] frames=%d avgMs=%.3f maxMs=%.3f "
-                "modelsPerFrame=%.1f passesPerFrame=%.2f recordMsPerFrame=%.3f recordedPerFrame=%.1f\n",
-                s_replayFrames, s_replayMs / s_replayFrames, s_replayMaxMs,
-                double(s_replayModels) / s_replayFrames, double(s_replayPasses) / s_replayFrames,
-                s_recordMs / s_replayFrames, double(s_recorded) / s_replayFrames);
-            duskVrLog(msg);
-            s_replayFrames = s_replayModels = s_replayPasses = s_recorded = 0;
-            s_replayMs = s_replayMaxMs = s_recordMs = 0.0;
-        }
-    }
+    // Model-replay stats accumulate every frame; nothing logs them anymore,
+    // so just reset them to keep the counters from growing all session.
+    (void)dusk::interp::material::take_replay_stats();
 
     // TEMP DIAGNOSTIC -- see the comment block above tick(). Log on a dip,
     // plus a periodic baseline. Cull counters are read+reset here too.
