@@ -23,6 +23,8 @@
 
 #if defined(TARGET_ANDROID) || defined(__ANDROID__) || defined(ANDROID)
 #include <android/log.h>
+#elif !defined(_WIN32)
+// Linux/other POSIX: no OutputDebugStringA or logcat -- write to stderr.
 #else
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -41,6 +43,10 @@ namespace dusk::vr {
 #if defined(TARGET_ANDROID) || defined(__ANDROID__) || defined(ANDROID)
 inline void duskVrLog(const char* msg) {
     __android_log_print(ANDROID_LOG_INFO, "dusklight_vr", "%s", msg);
+}
+#elif !defined(_WIN32)
+inline void duskVrLog(const char* msg) {
+    std::fputs(msg, stderr);
 }
 #else
 inline void duskVrLog(const char* msg) { OutputDebugStringA(msg); }

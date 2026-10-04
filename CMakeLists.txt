@@ -817,8 +817,8 @@ install_bundled_mods()
 # The D3D12 / DXGI shared-handle path in vr_xr_submit.hpp is Windows-specific,
 # and vr_xr_bootstrap.hpp's Vulkan branch is Android-specific (see its own
 # top comment) -- no other platform has either wired up.
-if (NOT WIN32 AND NOT ANDROID)
-    message(STATUS "Dusklight VR: skipping — Windows/Android only for now")
+if (NOT WIN32 AND NOT ANDROID AND NOT (UNIX AND NOT APPLE))
+    message(STATUS "Dusklight VR: skipping — Windows/Android/Linux only for now")
     return()
 endif ()
 
@@ -835,7 +835,14 @@ message(STATUS "Dusklight VR: configuring")
 # 1. Find OpenXR
 # ============================================================
 
-if (ANDROID)
+if (ANDROID OR (UNIX AND NOT APPLE))
+    # Android AND native Linux both build the Khronos loader from source.
+    # Linux links it STATICALLY so the shipped binary/AppImage has no
+    # dependency on a distro libopenxr_loader (SteamOS / Steam Frame may
+    # not ship one, and distros ship different versions); the static
+    # loader still finds the active runtime (SteamVR, Monado, WiVRn, ALVR)
+    # via XR_RUNTIME_JSON / active_runtime.json like the shared one.
+    #
     # CORRECTED 2026-09-16 (previous version of this branch assumed Meta's
     # OpenXR Mobile SDK download ships a prebuilt libopenxr_loader.so per
     # ABI -- checked the actual downloaded package this session and that's
@@ -856,7 +863,15 @@ if (ANDROID)
     set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(BUILD_CONFORMANCE_TESTS OFF CACHE BOOL "" FORCE)
     set(BUILD_ALL_EXTENSIONS OFF CACHE BOOL "" FORCE)
-    set(DYNAMIC_LOADER ON CACHE BOOL "" FORCE)
+    if (ANDROID)
+        set(DYNAMIC_LOADER ON CACHE BOOL "" FORCE)
+    else ()
+        set(DYNAMIC_LOADER OFF CACHE BOOL "" FORCE)
+        # Vendored jsoncpp, not the distro's: keeps the static loader free of
+        # system library dependencies (and of jsoncpp's non-exported
+        # interface target, which breaks the loader's install(EXPORT)).
+        set(BUILD_WITH_SYSTEM_JSONCPP OFF CACHE BOOL "" FORCE)
+    endif ()
     FetchContent_Declare(
         openxr_sdk_source
         GIT_REPOSITORY https://github.com/KhronosGroup/OpenXR-SDK-Source.git
@@ -875,6 +890,8 @@ if (ANDROID)
         add_library(OpenXR::openxr_loader ALIAS openxr_loader)
     endif ()
     message(STATUS "Dusklight VR: building OpenXR loader from source (OpenXR-SDK-Source release-1.1.63)")
+
+    if (ANDROID)
 
     # Upstream 2.0 replaced the old shell-script JNI staging (stage-jni-
     # libs.sh, which this project's own VR fragment used to hook to also
@@ -896,6 +913,7 @@ dusklight.openxrLoader=$<TARGET_FILE:openxr_loader>
 dusklight.androidAbi=${ANDROID_ABI}
             ")
     message(STATUS "Dusklight VR: Android OpenXR loader staging properties: ${_dusklight_android_properties}")
+    endif ()
 else ()
     # Try vcpkg / system find_package first, then fall back to a manual SDK path.
     find_package(OpenXR CONFIG QUIET)
@@ -920,7 +938,8 @@ else ()
             message(WARNING
                 "Dusklight VR: OpenXR SDK not found. "
                 "Install via vcpkg (vcpkg install openxr-loader:x64-windows) "
-                "or set OPENXR_SDK_DIR to the SDK root. "
+                "or set OPENXR_SDK_DIR to the SDK root. On Linux, install the distro "
+                "openxr / libopenxr-dev package. "
                 "Building without VR support.")
             return()
         endif ()
@@ -993,7 +1012,21 @@ if (DAWN_NATIVE_INCLUDE_DIR)
     target_include_directories(dusklight_vr INTERFACE "${DAWN_NATIVE_INCLUDE_DIR}")
 endif ()
 
-if (ANDROID)
+if (UNIX AND NOT APPLE AND NOT ANDROID)
+    # Native Linux: same Vulkan XR path as Android (XR_KHR_vulkan_enable2),
+    # minus the Android-only pieces -- vr_xr_bootstrap.hpp selects it via
+    # __linux__. Runtime is whatever the system loader finds (Monado,
+    # SteamVR, WiVRn, ALVR) via XR_RUNTIME_JSON / active_runtime.json.
+    find_package(Vulkan REQUIRED)
+    target_link_libraries(dusklight_vr INTERFACE
+        OpenXR::openxr_loader
+        Vulkan::Vulkan
+    )
+    target_compile_definitions(dusklight_vr INTERFACE
+        DUSK_VR_ENABLED=1
+        XR_USE_GRAPHICS_API_VULKAN=1
+    )
+elseif (ANDROID)
     # find_package(Vulkan) resolves against the NDK's bundled Vulkan headers
     # + libvulkan.so via the Android CMake toolchain file (same toolchain
     # the android-arm64/android-x86_64 presets already use to build

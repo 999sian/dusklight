@@ -14,6 +14,20 @@ Twilight Princess PC port ("dusklight") with an in-progress VR mod.
   — if the game is running it locks the exe and the link step fails with
   `LNK1104`. Ask the user to close it first.
 
+- **Native Linux** (added 2026-10-03, CONFIRMED in-headset on WiVRn +
+  Quest 3, RX 5700 XT/RADV, GPU-direct path active): `cmake --preset linux-default-relwithdebinfo && cmake --build
+  --preset linux-default-relwithdebinfo`. Needs Vulkan; the OpenXR loader is
+  built from source and linked statically (no system `openxr` needed).
+  Distributable x86_64 AppImage: `ci/build-linux-portable.sh` (Ubuntu 24.04
+  container via podman; a host build on CachyOS needs glibc 2.44 and won't
+  run elsewhere). arm64/Steam Frame native build dropped by user choice. Linux uses the same Vulkan XR path as Quest
+  (`DUSK_VR_XR_GRAPHICS_VULKAN`); Android-only pieces are gated by
+  `DUSK_VR_PLATFORM_ANDROID`. VR logs (`duskVrLog`) go to stderr on Linux.
+  `.gitmodules` points `extern/aurora` at encounter/aurora, but the pinned
+  `aurora-vr` commit only exists on JoeyAW/aurora — override locally with
+  `git config submodule.extern/aurora.url https://github.com/JoeyAW/aurora.git`
+  before `git submodule update --init`.
+
 For the VR-rendering debug loop (targeted `OutputDebugStringA` logging,
 RenderDoc GPU captures) and the full VR mod status/history — root causes,
 fixes, investigation trails, known open issues — see the `vr-mod-notes`

@@ -15119,3 +15119,101 @@ Covers every aim/subject-look item (bow, slingshot, hookshot, boomerang,
 Dominion Rod, first-person look) since they all go through that function.
 If the same loop shows up elsewhere, the same flag is the pattern: anything
 that sets Link's facing from the headset in Third Person must pause the follow.
+
+### Native Linux build (WiVRn / Monado) — CONFIRMED WORKING IN-HEADSET 2026-10-03
+
+User: "runs great" (WiVRn + Quest 3, AMD RX 5700 XT on RADV/Mesa 26.2,
+CachyOS). Build: `cmake --preset linux-default-relwithdebinfo && cmake
+--build --preset linux-default-relwithdebinfo`; needs system `openxr` +
+Vulkan. Linux reuses the Quest's Vulkan XR path.
+
+- `vr_xr_bootstrap.hpp`: `DUSK_VR_XR_GRAPHICS_VULKAN` is now on for
+  Android OR `__linux__`; the Android-only pieces (JNI loader init,
+  XR_KHR_android_create_instance, XR_KHR_android_thread_settings, AHB
+  device extension, `VK_USE_PLATFORM_ANDROID_KHR`, jni/SDL_system includes)
+  are gated by the new `DUSK_VR_PLATFORM_ANDROID`. `vr_debug_log.hpp`
+  writes to stderr on Linux. `vr_main.cpp`: window-surface present
+  suppression is Android-only (the desktop mirror stays visible on Linux).
+- CMakeLists.txt VR fragment: Linux branch (Vulkan + system OpenXR via
+  `find_package(OpenXR CONFIG)`, `XR_USE_GRAPHICS_API_VULKAN`, no platform
+  define).
+- `XrGraphicsDevice` gained `vendorID`/`deviceID`; startup now requires
+  Dawn's adapter to match the XR runtime's GPU before enabling the
+  opaque-fd GPU-direct path (iGPU+dGPU desktops). Applies to Quest too
+  (always matches there).
+- aurora `gpu.cpp`: the shared-image feature request block now runs on
+  `__linux__` too, and requests only ONE shared-fence type (SyncFD
+  preferred, OpaqueFD fallback) -- Dawn fails device creation with "At most
+  one of SharedFenceVkSemaphoreOpaqueFD, SharedFenceSyncFD ... may be
+  enabled" when both are requested; RADV reports both, Quest only SyncFD.
+  Symptom of getting this wrong: Vulkan device fails, aurora silently falls
+  back to OpenGLES, then "Device is lost" spam forever.
+- REAL BUG, all platforms: `createXrGraphicsDevice()` assigned the OpenXR
+  `minApiVersionSupported` (an XrVersion, major<<48|minor<<32) straight
+  into `VkApplicationInfo::apiVersion` -> truncated to 0 = Vulkan 1.0, so
+  1.1 entry points (`vkGetImageMemoryRequirements2`) were null on RADV ->
+  segfault in `createExportedImage()` on the first VR frame. Now converted
+  via XR_VERSION_MAJOR/MINOR and raised to at least 1.1 (capped by the
+  runtime's max). Quest had been getting away with it.
+- WiVRn doesn't offer the native swapchain format; createSwapchain picked
+  candidate 50 (an sRGB variant) -- colors reported fine.
+- Submodule footgun: `.gitmodules` points `extern/aurora` at
+  encounter/aurora but the pinned `aurora-vr` commit only exists on
+  JoeyAW/aurora -- `git config submodule.extern/aurora.url
+  https://github.com/JoeyAW/aurora.git` before `git submodule update`.
+- Known gaps: gameplay button bindings exist only for
+  `oculus/touch_controller` (fine on WiVRn/Quest; Index/Vive wands under
+  Monado get pose tracking but no buttons). `[dusk::vr::perf]`/[passdump]
+  diagnostics are noisy on stderr. Nothing committed yet.
+
+### Linux release / Steam Frame build — PAUSED 2026-10-03, resume here
+
+Native Linux VR confirmed working (section above). Distribution is NOT
+done:
+- `build/appimage/Dusklight_VR_(TPVR)-linux-vr-test-9b296d8d15-x86_64.AppImage`
+  exists (linuxdeploy, upstream's ci/build-appimage.sh flow, libvulkan
+  excluded so the system loader/ICDs are used). Smoke-tested flatscreen +
+  Vulkan + GPU-direct support check + mods/res OK; VR from the AppImage
+  itself NOT yet confirmed (WiVRn was closed during that run, so
+  xrCreateInstance failed as expected -- WiVRn only writes
+  ~/.config/openxr/1/active_runtime.json while running).
+- That AppImage is NOT shippable: built on CachyOS, it needs GLIBC_2.44 and
+  GLIBCXX_3.4.36 (GCC 16 libstdc++) -> won't run on SteamOS, Ubuntu, Mint,
+  Debian. The raw build is worse (links ~70 CachyOS system libs).
+- User requirement: must run on all distros, ESPECIALLY SteamOS on the
+  Steam Frame (ARM64 / Adreno). Agreed plan:
+  1. User installs: `sudo pacman -S distrobox podman qemu-user-static
+     qemu-user-static-binfmt` (none present as of 2026-10-03).
+  2. x86_64: build in an Ubuntu 24.04 container (upstream CI's base,
+     `.github/workflows/build.yml` runner ubuntu-24.04, preset family
+     x-linux-ci-gcc, AURORA_SDL3_PROVIDER=vendor), static libstdc++, then
+     AppImage; verify max GLIBC symbol with `objdump -T | grep GLIBC_`.
+  3. arm64 native for the Frame (upstream CI has ubuntu-24.04-arm, so the
+     base game supports it; VR code already compiles for arm64 via
+     Android). Build in an arm64 container under qemu (slow, hours).
+     Native preferred over FEX x86 emulation (CPU-bound VR).
+  4. Untestable here: Frame's OpenXR runtime behaviour, SteamOS library
+     versions on the Frame -- check against built output, don't assume.
+- A tester README was drafted (requirements, `chmod +x`, start the runtime
+  first, XR_RUNTIME_JSON override, Quest-only button bindings, gamma
+  slider, `2>&1 | tee` for logs) but not written -- user declined the step.
+- Nothing committed; aurora `gpu.cpp` change is uncommitted on `aurora-vr`.
+
+### Linux distribution, resumed 2026-10-04 — x86_64 only; static OpenXR loader; portable script ready, NOT yet run
+
+User chose x86_64 only (no native arm64 Frame build — Frame users can stream
+from PC, or try the x86_64 AppImage under SteamOS's FEX; neither testable
+here). `CMakeLists.txt` VR fragment: Linux now shares Android's FetchContent
+of OpenXR-SDK-Source release-1.1.63, but `DYNAMIC_LOADER OFF` +
+`BUILD_WITH_SYSTEM_JSONCPP OFF` (system jsoncpp made the loader's
+install(EXPORT) fail on a non-exported `jsoncpp_interface`, and would add a
+distro dependency). Verified on the host build: no libopenxr/jsoncpp in
+`ldd`, `xrCreateInstance` linked in. NOT yet re-tested in-headset with the
+static loader (should be identical; loader still reads active_runtime.json).
+`ci/build-linux-portable.sh`: runs itself in docker.io/library/ubuntu:24.04
+under podman/docker, builds to build/portable-x86_64, installs to
+build/portable-install, prints the max GLIBC symbol, makes the AppImage in
+build/portable (APPIMAGE_EXTRACT_AND_RUN=1, libvulkan left to the host).
+Blocked on `sudo pacman -S podman`. Baseline = glibc 2.39/GLIBCXX_3.4.32
+(SteamOS 3.x, Ubuntu 24.04+, Mint 22+, Fedora 40+, Arch); Ubuntu 22.04 /
+Debian 12 not covered (upstream's own baseline).

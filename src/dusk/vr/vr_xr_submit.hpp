@@ -59,7 +59,9 @@
 // vkCreateBuffer, command pools, ...), not just the XR-side structs
 // bootstrap.hpp itself needs.
 #include <vulkan/vulkan.h>
+#if DUSK_VR_PLATFORM_ANDROID
 #include <android/log.h>
+#endif
 // dup()/close() -- Dawn's exported fence fd stays Dawn-owned, Vulkan's
 // import takes ownership of what it's given; a dup is the only way to hand
 // Vulkan its own copy (see finishSharedImageGpuCopy()).

@@ -854,6 +854,7 @@ bool startup() {
         //    added to aurora's Thread wrapper for exactly this -- 0 means
         //    that thread hasn't been started (e.g. FIFO processing not in
         //    threaded mode), in which case it's just skipped.
+#if DUSK_VR_PLATFORM_ANDROID
         if (boot.hasAndroidThreadSettings && boot.xrSetAndroidApplicationThreadKHR_) {
             const uint32_t mainTid = static_cast<uint32_t>(gettid());
             const uint32_t renderTid =
@@ -880,6 +881,7 @@ bool startup() {
         } else {
             duskVrLog("[dusk::vr::startup] XR_KHR_android_thread_settings not available\n");
         }
+#endif  // DUSK_VR_PLATFORM_ANDROID
 #endif
 
         // FIXED this session: g_rightGripSpace/g_leftGripSpace had the exact
@@ -927,8 +929,22 @@ bool startup() {
         // above). Same "both sides must independently support it, don't
         // assume" shape as the D3D12 path's adaptersMatch+
         // g_sharedTextureMemoryD3D12Supported pair.
+        // Opaque-fd sharing only works when Dawn and the XR runtime picked
+        // the same GPU (always true on Quest; not guaranteed on a desktop
+        // with an iGPU + dGPU).
+        const bool sameGpu = aurora::webgpu::g_adapterInfo.vendorID == gfx.vendorID &&
+                             aurora::webgpu::g_adapterInfo.deviceID == gfx.deviceID;
+        if (!sameGpu) {
+            char msg[200];
+            duskVrSnprintf(msg, sizeof(msg),
+                        "[dusk::vr::startup] Dawn adapter %04x:%04x differs from the XR runtime's GPU "
+                        "%04x:%04x -- GPU-direct path disabled\n",
+                        aurora::webgpu::g_adapterInfo.vendorID, aurora::webgpu::g_adapterInfo.deviceID,
+                        gfx.vendorID, gfx.deviceID);
+            duskVrLog(msg);
+        }
         const bool sharedImageSupported =
-            aurora::webgpu::g_vulkanSharedImageExportSupported && gfx.supportsExternalMemoryFd;
+            sameGpu && aurora::webgpu::g_vulkanSharedImageExportSupported && gfx.supportsExternalMemoryFd;
         g_ownedSession->setUsesSharedImageGpuDirect(sharedImageSupported);
         {
             char msg[256];
@@ -1104,7 +1120,7 @@ bool startup() {
         // menu access.
         ensureVrMenuGamepadAttached();
 
-#if DUSK_VR_XR_GRAPHICS_VULKAN
+#if DUSK_VR_PLATFORM_ANDROID
         // Standalone Android/Quest: the Activity's own window is never
         // visible while the OpenXR session owns the display, but aurora's
         // render worker still acquired+presented it every frame -- and
