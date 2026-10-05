@@ -1,1 +1,1 @@
--keep class dev.twilitrealm.dusk.DuskActivity { *; }
+-keep class com.joeyaw.tpvr.DuskActivity { *; }

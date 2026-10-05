@@ -210,15 +210,28 @@ jobs:
       - name: Build bundled mods
         run: cmake --build --preset ${{matrix.preset}} --target dusklight_mods
 
+      # Signs with the stable release key when the ANDROID_KEYSTORE_BASE64 secret is set (see
+      # platforms/android/app/build.gradle); otherwise the APK stays unsigned, as before.
+      - name: Decode signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{secrets.ANDROID_KEYSTORE_BASE64}}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then exit 0; fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/dusklight-release.jks"
+          echo "DUSK_ANDROID_KEYSTORE=$RUNNER_TEMP/dusklight-release.jks" >> "$GITHUB_ENV"
+
       - name: Build APK
         working-directory: platforms/android
+        env:
+          DUSK_ANDROID_KEYSTORE_PASSWORD: ${{secrets.ANDROID_KEYSTORE_PASSWORD}}
+          DUSK_ANDROID_KEY_ALIAS: ${{secrets.ANDROID_KEY_ALIAS}}
         run: ./gradlew :app:assembleRelease --rerun-tasks
 
       - name: Stage artifacts
         run: |
           mkdir -p upload/sdk
           cp build/*/stub-android-*.so upload/sdk/
-          cp platforms/android/app/build/outputs/apk/release/app-${{matrix.abi}}-release-unsigned.apk upload/
+          cp platforms/android/app/build/outputs/apk/release/app-${{matrix.abi}}-release*.apk upload/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7

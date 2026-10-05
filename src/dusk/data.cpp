@@ -7,6 +7,11 @@
 
 #include <string>
 
+#if defined(__ANDROID__)
+#include <SDL3/SDL_system.h>
+#include <jni.h>
+#endif
+
 namespace dusk::data {
 namespace {
 
@@ -126,8 +131,67 @@ borealis::data::Manager& manager() {
     return instance;
 }
 
+#if defined(__ANDROID__)
+// The default data path on Android is app-internal storage, which (along with borealis's location
+// descriptor) is wiped whenever the app is uninstalled, taking the user's saves with it. When
+// DuskActivity has all-files access it returns a shared-storage folder, and a default-mode install
+// is switched onto it so saves outlive the app. Migration never overwrites existing files, so after
+// a reinstall the saves already in the shared folder win over the fresh internal ones.
+namespace {
+
+std::filesystem::path await_shared_data_dir() {
+    auto* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
+    auto activity = static_cast<jobject>(SDL_GetAndroidActivity());
+    if (env == nullptr || activity == nullptr) {
+        return {};
+    }
+    std::filesystem::path result;
+    jclass activityClass = env->GetObjectClass(activity);
+    jmethodID method =
+        env->GetMethodID(activityClass, "awaitSharedDataDir", "()Ljava/lang/String;");
+    if (method == nullptr) {
+        env->ExceptionClear();
+    } else if (auto path = static_cast<jstring>(env->CallObjectMethod(activity, method))) {
+        if (const char* chars = env->GetStringUTFChars(path, nullptr)) {
+            result = borealis::io::fs_path_from_utf8(chars);
+            env->ReleaseStringUTFChars(path, chars);
+        }
+        env->DeleteLocalRef(path);
+    } else if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+    env->DeleteLocalRef(activityClass);
+    env->DeleteLocalRef(activity);
+    return result;
+}
+
+bool switch_to_shared_storage(const std::filesystem::path& userDirectoryOverride) {
+    if (!userDirectoryOverride.empty() ||
+        manager().configured_mode() != borealis::data::LocationMode::Default)
+    {
+        return false;
+    }
+    const auto sharedPath = await_shared_data_dir();
+    if (sharedPath.empty() || !operation_succeeded(manager().set_custom_data_path(sharedPath))) {
+        return false;
+    }
+    Log.info("Moving data to shared storage: {}", borealis::io::fs_path_to_string(sharedPath));
+    return true;
+}
+
+}  // namespace
+#endif
+
 Paths initialize_data(const std::filesystem::path& userDirectoryOverride) {
-    const auto status = manager().initialize(userDirectoryOverride);
+    auto status = manager().initialize(userDirectoryOverride);
+#if defined(__ANDROID__)
+    if ((status || status.code == borealis::data::ErrorCode::MigrationIncomplete) &&
+        switch_to_shared_storage(userDirectoryOverride))
+    {
+        // Re-initialize to pick up the new descriptor and migrate now rather than next launch.
+        status = manager().initialize(userDirectoryOverride);
+    }
+#endif
     if (!status && status.code != borealis::data::ErrorCode::MigrationIncomplete) {
         Log.fatal("Failed to initialize data folders: {}", status_message(status));
     }

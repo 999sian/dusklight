@@ -67,3 +67,28 @@ if (dusklightPropertiesFile.isFile()) {
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 }
+
+// Stable APK signing. Android refuses to install an update signed with a different key than the
+// installed app, so without a fixed key every update turned into an uninstall + reinstall that
+// wiped the app's internal storage (saves included). The key comes from Gradle properties (e.g.
+// ~/.gradle/gradle.properties) or environment variables (CI), and is applied to debug builds too
+// so local and CI builds can update each other in place. Without it, release stays unsigned and
+// debug uses the machine's debug keystore, as before.
+def signingValue = { String name -> findProperty(name) ?: System.getenv(name) }
+def releaseKeystore = signingValue('DUSK_ANDROID_KEYSTORE')
+if (releaseKeystore) {
+    android {
+        signingConfigs {
+            dusklight {
+                storeFile = file(releaseKeystore)
+                storePassword = signingValue('DUSK_ANDROID_KEYSTORE_PASSWORD')
+                keyAlias = signingValue('DUSK_ANDROID_KEY_ALIAS')
+                keyPassword = signingValue('DUSK_ANDROID_KEY_PASSWORD') ?: signingValue('DUSK_ANDROID_KEYSTORE_PASSWORD')
+            }
+        }
+        buildTypes {
+            debug { signingConfig = signingConfigs.dusklight }
+            release { signingConfig = signingConfigs.dusklight }
+        }
+    }
+}
