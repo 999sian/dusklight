@@ -1201,6 +1201,15 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "more GPU headroom on the standalone headset -- 90% cuts the pixel count "
             "by a fifth. Takes effect the next time the game starts.",
             50, 100, 5);
+#if VR_SETTINGS_STANDALONE
+        config_bool_select(leftPane, rightPane, getSettings().game.vrSuperResolution,
+            {
+                .key = "Super Resolution (Sharpening)",
+                .helpText = "Uses Meta Quest Super Resolution (XR_FB_composition_layer_settings) to apply "
+                            "hardware edge-adaptive sharpening to the headset display. Makes distant scenery "
+                            "and textures significantly crisper. On by default."
+            });
+#endif
 
 #if !VR_SETTINGS_STANDALONE
         // Standalone renders through the native Quest runtime -- no SteamVR / Virtual Desktop /

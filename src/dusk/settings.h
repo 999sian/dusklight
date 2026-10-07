@@ -314,6 +314,11 @@ struct UserSettings {
         // Read once at VR startup (sizes the swapchain), so it takes effect
         // on the next launch.
         ConfigVar<float> vrRenderScale;
+        // Meta Quest Super Resolution / sharpening (XR_FB_composition_layer_settings):
+        // asks the Oculus runtime to apply an edge-aware hardware sharpening filter
+        // to the eye layer, making distant textures and geometry look significantly
+        // crisper. Default true on standalone.
+        ConfigVar<bool> vrSuperResolution;
         // Application SpaceWarp (XR_FB_space_warp, standalone Quest only):
         // the app submits per-eye motion vectors + depth alongside the
         // color image and the runtime synthesizes every other frame,

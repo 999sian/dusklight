@@ -95,6 +95,7 @@ UserSettings g_userSettings = {
         .vrScreenModeWidth {"game.vrScreenModeWidth", 1.0f},
         .vrSinglePassStereo {"game.vrSinglePassStereo", true},
         .vrRenderScale {"game.vrRenderScale", 1.0f},
+        .vrSuperResolution {"game.vrSuperResolution", true},
         .vrSpaceWarp {"game.vrSpaceWarp", false},
         .vrSpaceWarpDebugNegateMv {"game.vrSpaceWarpDebugNegateMv", false},
         .vrSpaceWarpDebugFlipMvY {"game.vrSpaceWarpDebugFlipMvY", false},
@@ -421,6 +422,7 @@ void registerSettings() {
     Register(g_userSettings.game.vrScreenModeWidth);
     Register(g_userSettings.game.vrSinglePassStereo);
     Register(g_userSettings.game.vrRenderScale);
+    Register(g_userSettings.game.vrSuperResolution);
     Register(g_userSettings.game.vrSpaceWarp);
     Register(g_userSettings.game.vrSpaceWarpDebugNegateMv);
     Register(g_userSettings.game.vrSpaceWarpDebugFlipMvY);
