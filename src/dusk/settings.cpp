@@ -89,6 +89,8 @@ UserSettings g_userSettings = {
         .enableHighQualityMinimapTextures {"game.enableHighQualityMinimapTextures", true},
         .vrDesktopMirror {"game.vrDesktopMirror", true},
         .vrScreenMode {"game.vrScreenMode", false},
+        .vrScreenModeStereo {"game.vrScreenModeStereo", true},
+        .vrScreenModeDepth {"game.vrScreenModeDepth", 1.0f},
         .vrSinglePassStereo {"game.vrSinglePassStereo", true},
         .vrRenderScale {"game.vrRenderScale", 1.0f},
         .vrSpaceWarp {"game.vrSpaceWarp", false},
@@ -411,6 +413,8 @@ void registerSettings() {
     Register(g_userSettings.game.enableHighQualityMinimapTextures);
     Register(g_userSettings.game.vrDesktopMirror);
     Register(g_userSettings.game.vrScreenMode);
+    Register(g_userSettings.game.vrScreenModeStereo);
+    Register(g_userSettings.game.vrScreenModeDepth);
     Register(g_userSettings.game.vrSinglePassStereo);
     Register(g_userSettings.game.vrRenderScale);
     Register(g_userSettings.game.vrSpaceWarp);

@@ -945,6 +945,19 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 .helpText = "Shows flat-camera gameplay on a large 16:9 screen about 5.3 m wide and 4.5 m away. "
                             "The screen follows your head; the room stays black. Switches live."
             });
+        config_bool_select(leftPane, rightPane, getSettings().game.vrScreenModeStereo,
+            {
+                .key = "Stereoscopic 3D Screen",
+                .helpText = "When Giant Screen Mode is active, renders stereoscopic 3D onto the virtual display "
+                            "with depth converging on Link (like GalaxyQuest / 3D cinema). Turn off for 2D flat display.",
+                .isDisabled = [] { return !dusk::getSettings().game.vrScreenMode.getValue(); }
+            });
+        config_percent_select(leftPane, rightPane, getSettings().game.vrScreenModeDepth,
+            "3D Screen Depth",
+            "Amount of 3D depth on the virtual screen (50% .. 200%). Higher values make background scenery "
+            "recede farther into the screen and Link pop out toward you.",
+            20, 200, 10,
+            [] { return !dusk::getSettings().game.vrScreenMode.getValue() || !dusk::getSettings().game.vrScreenModeStereo.getValue(); });
 #if !VR_SETTINGS_STANDALONE
         // Standalone (Quest) has no desktop window to mirror to. The setting itself stays
         // registered and defaults ON there -- the mirror path also drives the Dusklight overlay's

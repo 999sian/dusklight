@@ -1465,7 +1465,7 @@ static bool spaceWarpEncodeFrame(const vr_render::StereoParams& sp, const aurora
 }  // namespace
 
 static aurora::gfx::ResolvedTargets renderScreenModeGamePass(uint32_t width, uint32_t height,
-                                                             bool menuVisible) {
+                                                             bool menuVisible, int eye = 0) {
     view_class* view = dComIfGd_getView();
     if (view == nullptr) {
         return {};
@@ -1496,6 +1496,23 @@ static aurora::gfx::ResolvedTargets renderScreenModeGamePass(uint32_t width, uin
 #if WIDESCREEN_SUPPORT
     mDoGph_gInf_c::setWideZoomProjection(view->projMtx);
 #endif
+
+    // Stereoscopic 3D on Giant Screen (GalaxyQuest model):
+    // Offsets camera projection horizontally by ±shear based on IPD and convergence on Link.
+    const bool stereo = dusk::getSettings().game.vrScreenModeStereo.getValue();
+    if (stereo && eye != 0) {
+        const float depthMultiplier = std::clamp(dusk::getSettings().game.vrScreenModeDepth.getValue(), 0.2f, 3.0f);
+        // eye == 1 is right eye: shift projection right (+shear); left eye (eye == 0) shifts left (-shear).
+        const float shearDir = (eye == 1) ? 0.025f : -0.025f;
+        const float shear = shearDir * depthMultiplier;
+        // In perspective projection matrix, m0[2] (m[0][2]) offsets the optical center horizontally.
+        view->projMtx[0][2] += shear;
+    } else if (stereo) {
+        const float depthMultiplier = std::clamp(dusk::getSettings().game.vrScreenModeDepth.getValue(), 0.2f, 3.0f);
+        const float shear = -0.025f * depthMultiplier;
+        view->projMtx[0][2] += shear;
+    }
+
     cMtx_concatProjView(view->projMtx, view->viewMtx, view->projViewMtx);
     mDoLib_clipper::setup(view->fovy, screenAspect, view->near_, cullFar);
 
@@ -3078,14 +3095,24 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     }
 
     if (screenMode) {
-        // The screen spans ~61 degrees, about half the eye's vertical FOV, so
-        // half the eye height roughly matches panel pixel density. A multiple
-        // of 9 keeps the 16:9 width exact.
         const uint32_t screenHeight = std::max(720u, (g_eyeImageHeight / 2u / 9u) * 9u);
         const uint32_t screenWidth = screenHeight * 16u / 9u;
-        const aurora::gfx::ResolvedTargets screenTargets =
-            renderScreenModeGamePass(screenWidth, screenHeight, menuVisible);
-        vr_render::copyScreenModeTexture(screenTargets, screenWidth, screenHeight);
+        const bool stereo = dusk::getSettings().game.vrScreenModeStereo.getValue();
+
+        if (stereo) {
+            // Left eye (eye 0)
+            const aurora::gfx::ResolvedTargets leftTargets =
+                renderScreenModeGamePass(screenWidth, screenHeight, menuVisible, 0);
+            vr_render::copyScreenModeTexture(leftTargets, screenWidth, screenHeight, 0);
+            // Right eye (eye 1)
+            const aurora::gfx::ResolvedTargets rightTargets =
+                renderScreenModeGamePass(screenWidth, screenHeight, menuVisible, 1);
+            vr_render::copyScreenModeTexture(rightTargets, screenWidth, screenHeight, 1);
+        } else {
+            const aurora::gfx::ResolvedTargets screenTargets =
+                renderScreenModeGamePass(screenWidth, screenHeight, menuVisible, 0);
+            vr_render::copyScreenModeTexture(screenTargets, screenWidth, screenHeight, 0);
+        }
     }
     // Desktop mirror: captured from eye 0 (left) inside the loop below,
     // applied once after it. See aurora::gfx::set_present_source_mirror()'s
@@ -3248,7 +3275,7 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
 
         if (screenMode) {
             const auto screenDrawStart = PerfClock::now();
-            vr_render::drawScreenModeBillboard();
+            vr_render::drawScreenModeBillboard(static_cast<int>(eye));
             g_perfEyePainterMs += perfMs(screenDrawStart, PerfClock::now());
         } else {
         fpcM_DrawIterater((fpcM_DrawIteraterFunc)fpcM_Draw);

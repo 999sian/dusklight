@@ -1233,9 +1233,9 @@ inline TGXTexObj g_menuBillboardTexObj{};
 inline uint32_t g_menuBillboardTexWidth = 0;
 inline uint32_t g_menuBillboardTexHeight = 0;
 
-inline u8 g_screenModeTexKey[4]{};
-inline TGXTexObj g_screenModeTexObj{};
-inline wgpu::Texture g_screenModeCopyTexture;
+inline u8 g_screenModeTexKey[2][4]{};
+inline TGXTexObj g_screenModeTexObj[2]{};
+inline wgpu::Texture g_screenModeCopyTexture[2];
 inline uint32_t g_screenModeTexWidth = 0;
 inline uint32_t g_screenModeTexHeight = 0;
 
@@ -1514,28 +1514,27 @@ inline void copyEncoderTaskCallback(const aurora::gfx::EncoderTaskContext& /*ctx
 } // namespace screen_mode_detail
 
 inline bool copyScreenModeTexture(const aurora::gfx::ResolvedTargets& targets, uint32_t width,
-                                  uint32_t height) {
+                                  uint32_t height, int eye = 0) {
     if (!targets.colorTexture || width == 0 || height == 0) {
         return false;
     }
+    const int slot = (eye == 1) ? 1 : 0;
 
-    if (!g_screenModeCopyTexture || g_screenModeTexWidth != width || g_screenModeTexHeight != height) {
-        // The GX texture cache is FIFO-owned; synchronize before its first insertion or resize.
+    if (!g_screenModeCopyTexture[slot] || g_screenModeTexWidth != width || g_screenModeTexHeight != height) {
         AuroraGXSync();
-        g_screenModeCopyTexture =
-            aurora::gx::ensure_external_copy_texture(g_screenModeTexKey, width, height, GX_TF_RGBA8);
-        if (!g_screenModeCopyTexture) {
+        g_screenModeCopyTexture[slot] =
+            aurora::gx::ensure_external_copy_texture(g_screenModeTexKey[slot], width, height, GX_TF_RGBA8);
+        if (!g_screenModeCopyTexture[slot]) {
             return false;
         }
-        GXInitTexObj(&g_screenModeTexObj, g_screenModeTexKey, width, height, GX_TF_RGBA8,
+        GXInitTexObj(&g_screenModeTexObj[slot], g_screenModeTexKey[slot], width, height, GX_TF_RGBA8,
                      GX_CLAMP, GX_CLAMP, GX_FALSE);
         g_screenModeTexWidth = width;
         g_screenModeTexHeight = height;
     }
 
-
     screen_mode_detail::s_pendingCopySrc = targets.colorTexture;
-    screen_mode_detail::s_pendingCopyDst = g_screenModeCopyTexture;
+    screen_mode_detail::s_pendingCopyDst = g_screenModeCopyTexture[slot];
     screen_mode_detail::s_pendingCopyWidth = width;
     screen_mode_detail::s_pendingCopyHeight = height;
     if (screen_mode_detail::s_copyTaskId == aurora::gfx::InvalidEncoderTask) {
@@ -1550,10 +1549,12 @@ inline bool copyScreenModeTexture(const aurora::gfx::ResolvedTargets& targets, u
     return true;
 }
 
-inline void drawScreenModeBillboard() {
+inline void drawScreenModeBillboard(int eye = 0) {
     if (g_screenModeTexWidth == 0 || g_screenModeTexHeight == 0) {
         return;
     }
+    const int slot = (eye == 1 && g_screenModeCopyTexture[1]) ? 1 : 0;
+    TGXTexObj* activeTex = &g_screenModeTexObj[slot];
 
     view_class* view = dComIfGd_getView();
     assert(view != nullptr && "VR screen mode: no active view_class");
@@ -1578,7 +1579,7 @@ inline void drawScreenModeBillboard() {
     GXSetZMode(GX_DISABLE, GX_ALWAYS, GX_DISABLE);
     GXSetCullMode(GX_CULL_NONE);
     GXSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    GXLoadTexObj(&g_screenModeTexObj, GX_TEXMAP0);
+    GXLoadTexObj(activeTex, GX_TEXMAP0);
 
     const float halfW = kScreenModeWidthMeters * 0.5f * kHudUnitsPerMetre;
     const float halfH = halfW * (9.0f / 16.0f);
