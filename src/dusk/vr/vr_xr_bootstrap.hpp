@@ -266,10 +266,14 @@ inline Bootstrap initialize() {
     if (boot.hasSpaceWarp) {
         enabledExtensions.push_back(XR_FB_SPACE_WARP_EXTENSION_NAME);
     }
+#if DUSK_VR_PLATFORM_ANDROID
+    // Standalone only: on PC the runtime / streamer owns the refresh rate,
+    // and requesting the 72Hz default there would lower it.
     boot.hasDisplayRefreshRate = instanceExtensionAvailable(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);
     if (boot.hasDisplayRefreshRate) {
         enabledExtensions.push_back(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);
     }
+#endif
 
     XrInstanceCreateInfo instanceInfo{XR_TYPE_INSTANCE_CREATE_INFO};
 #if DUSK_VR_PLATFORM_ANDROID

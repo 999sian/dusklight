@@ -1625,6 +1625,9 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
                         XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
                     g_sessionRunning =
                         XR_SUCCEEDED(xrBeginSession(g_session->session(), &resumeInfo));
+                    // The runtime may drop the requested rate across a
+                    // stop/start; ask again on the next tick.
+                    g_appliedDisplayRefreshRateSetting = -1;
                 }
             } else if (stateEvent.state == XR_SESSION_STATE_EXITING ||
                        stateEvent.state == XR_SESSION_STATE_LOSS_PENDING) {

@@ -1176,10 +1176,10 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         config_int_select(leftPane, rightPane, getSettings().game.vrDisplayRefreshRate,
             "VR Refresh Rate",
             "The headset's display refresh rate. The headset uses the highest rate it "
-            "supports at or below this value (72, 80, 90 or 120 Hz on Quest 2 and 3). "
-            "Higher rates look smoother but every frame must render faster; if the game "
-            "can't keep up the picture judders, so only raise it if your area runs steadily. "
-            "Applies immediately.",
+            "supports at or below this value (72, 80 or 90 Hz; 120 Hz only if it is enabled "
+            "in the headset's own display settings). Higher rates look smoother but every "
+            "frame must render faster; if the game can't keep up the picture judders, so "
+            "only raise it if your area runs steadily. Applies immediately.",
             72, 120, 2, {}, {}, " Hz");
 #endif
 
