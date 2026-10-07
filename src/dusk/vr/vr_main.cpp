@@ -2421,8 +2421,75 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         static int s_zTargetSettleStreak = 0;
         static float s_zTargetTrackElapsedSec = 0.f;
 
+        // First-person Z-target focus (game.vrZTargetCameraFocus): there's no
+        // flatscreen camera to follow in first person, so aim at the target
+        // itself. On lock-on (or switching targets) snap the view to the
+        // target's bearing from Link; after that, add only the CHANGE in that
+        // bearing each frame -- a relative nudge like "Turn With Game Camera",
+        // so the target stays where it was in view as it or Link moves while
+        // the headset still looks anywhere freely (never fights head input).
+        {
+            static fopAc_ac_c* s_fpFocusTarget = nullptr;
+            static s16 s_fpFocusLastBearingS = 0;
+            static float s_fpFocusSmoothedBearingRad = 0.f;
+
+            fopAc_ac_c* target = nullptr;
+            daAlink_c* fpLink = static_cast<daAlink_c*>(dComIfGp_getLinkPlayer());
+            if (dusk::getSettings().game.vrZTargetCameraFocus.getValue() && fpLink != nullptr &&
+                !fpLink->checkEventRun() && dusk::vr::isVrFirstPerson(fpLink))
+            {
+                target = fpLink->getAttentionLockTarget();
+            }
+
+            if (target == nullptr) {
+                s_fpFocusTarget = nullptr;
+            } else {
+                const float dx = target->current.pos.x - fpLink->current.pos.x;
+                const float dz = target->current.pos.z - fpLink->current.pos.z;
+                // Too close to have a stable bearing (target right on top of
+                // Link): hold, don't swing wildly.
+                constexpr float kMinFocusDistUnits = 40.f;
+                if (dx * dx + dz * dz > kMinFocusDistUnits * kMinFocusDistUnits) {
+                    const s16 bearingS = cM_atan2s(dx, dz);
+                    const bool jump = std::abs(cM_s2rad(static_cast<s16>(
+                                          bearingS - s_fpFocusLastBearingS))) >=
+                                      cM_s2rad(cM_deg2s(dusk::vr::kScriptedCameraJumpCutThresholdDeg));
+                    if (target != s_fpFocusTarget || jump) {
+                        // New lock-on / new target / bearing jump: center it.
+                        const cXyz currentHeadForward = vr_render::computeHeadWorldForward(
+                            hmdPose, dusk::vr::getSmoothTurnYawRad());
+                        const s16 currentYawS =
+                            cM_atan2s(currentHeadForward.x, currentHeadForward.z);
+                        dusk::vr::snapScriptedCameraYaw(
+                            cM_s2rad(static_cast<s16>(bearingS - currentYawS)));
+                        s_fpFocusSmoothedBearingRad = cM_s2rad(bearingS);
+                    } else {
+                        // Both positions only change once per 30Hz sim tick
+                        // (and enemies sway with their animations), so the
+                        // raw bearing moves in steps. Ease a smoothed bearing
+                        // toward it (framerate-independent exponential
+                        // smoothing) and apply only the smoothed change.
+                        constexpr float kFocusSmoothingTimeConstantSec = 0.2f;
+                        constexpr float kPi = 3.14159265358979323846f;
+                        float gap = cM_s2rad(bearingS) - s_fpFocusSmoothedBearingRad;
+                        while (gap > kPi) gap -= 2.f * kPi;
+                        while (gap < -kPi) gap += 2.f * kPi;
+                        const float alpha =
+                            1.f - std::exp(-pacing.dt / kFocusSmoothingTimeConstantSec);
+                        const float step = gap * alpha;
+                        s_fpFocusSmoothedBearingRad += step;
+                        dusk::vr::snapScriptedCameraYaw(step);
+                    }
+                    s_fpFocusTarget = target;
+                    s_fpFocusLastBearingS = bearingS;
+                }
+            }
+        }
+
         bool zTargetActive = false;
-        if (dusk::getSettings().game.vrThirdPerson.getValue()) {
+        if (dusk::getSettings().game.vrThirdPerson.getValue() &&
+            dusk::getSettings().game.vrZTargetCameraFocus.getValue())
+        {
             if (auto* link = static_cast<daAlink_c*>(dComIfGp_getLinkPlayer())) {
                 zTargetActive = link->checkAttentionLock();
             }

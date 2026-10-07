@@ -3541,6 +3541,10 @@ public:
     // pure safety net for the new out-of-band caller, not a behavior
     // change under normal gameplay.
     BOOL checkAttentionLock() { return mAttention != NULL && mAttention->Lockon(); }
+    // VR Z-target camera focus: the actor currently locked on, or NULL.
+    fopAc_ac_c* getAttentionLockTarget() {
+        return checkAttentionLock() ? mAttention->LockonTarget(0) : NULL;
+    }
 
     bool checkUpperAnime(u16 i_resIdx) const { return mUpperAnmHeap[UPPER_2].getIdx() == i_resIdx; }
     bool checkUnderAnime(u16 i_resIdx) const { return mUnderAnmHeap[UNDER_2].getIdx() == i_resIdx; }

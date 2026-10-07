@@ -15217,3 +15217,27 @@ build/portable (APPIMAGE_EXTRACT_AND_RUN=1, libvulkan left to the host).
 Blocked on `sudo pacman -S podman`. Baseline = glibc 2.39/GLIBCXX_3.4.32
 (SteamOS 3.x, Ubuntu 24.04+, Mint 22+, Fedora 40+, Arch); Ubuntu 22.04 /
 Debian 12 not covered (upstream's own baseline).
+
+### "Z-Target Camera Focus" (default ON) — CONFIRMED WORKING IN-HEADSET 2026-10-06 (first person with smoothing, and third person)
+
+Per user request: Z-targeting should center the VR view on the enemy, the way the flatscreen camera does.
+`game.vrZTargetCameraFocus` (settings.h/.cpp, default true), VR tab toggle after "Turn With Game Camera".
+New `daAlink_c::getAttentionLockTarget()` (d_a_alink.h; `mAttention->LockonTarget(0)` behind the
+null-safe `checkAttentionLock()`).
+- **First person (new)**, vr_main.cpp tick(), inside the Z-target block: on lock-on, a target switch, or a
+  bearing jump of 25 degrees or more (`kScriptedCameraJumpCutThresholdDeg`), snap the smooth-turn yaw so the
+  view faces the Link->target bearing (`current.pos` of both, XZ only). After that, each frame adds only the
+  CHANGE in that bearing (a relative nudge like "Turn With Game Camera"), so the target stays where it was in
+  view as it circles or Link strafes, without fighting head input. Held when the target is within 40 units
+  (unstable bearing). Skipped during events and in third person.
+- **Third person**: the existing swing-in tracker (flatscreen Z-target camera until settled) is now ALSO
+  gated on this setting. Previously it was unconditional in Third Person.
+Untested risks: whether continuous bearing-follow feels good or nauseating (earlier continuous PULL toward a
+target was rejected for cutscenes, but this is relative and never fights the head); interaction with movement
+direction while strafing (movement follows view yaw, which now follows the bearing).
+**Follow-up (same day): user reported first-person follow was jittery.** Cause: Link's and the target's
+`current.pos` only change once per 30Hz sim tick (plus enemy animation sway), so the per-frame bearing delta
+arrived in steps. Now a smoothed bearing (`s_fpFocusSmoothedBearingRad`, exponential, 0.2s time constant,
+`pacing.dt`-based) eases toward the raw bearing and only the smoothed step is applied. The initial lock-on
+snap is unchanged and resets the smoothed value. CONFIRMED in-headset 2026-10-06 ("much smoother"). `kFocusSmoothingTimeConstantSec`
+is the knob: raise it for smoother/laggier, lower it for snappier.

@@ -353,6 +353,12 @@ struct UserSettings {
         // the game camera while the headset still looks around freely on top.
         // Default on.
         ConfigVar<bool> vrThirdPersonFollowCameraYaw;
+        // Z-targeting turns the VR view to face the locked-on target, like the
+        // flatscreen camera does. First person: snaps to the target on lock-on,
+        // then follows the target's bearing as it (or Link) moves, so it stays
+        // where it was in view; the headset still looks around freely. Third
+        // person: the existing follow-the-Z-target-camera swing-in. Default on.
+        ConfigVar<bool> vrZTargetCameraFocus;
         // Attaches Link's body rotation to the headset's own yaw. Without
         // this, current.angle.y/shape_angle.y (daAlink_c::
         // setSpeedAndAngleNormal(), d_a_alink.cpp) only ease toward

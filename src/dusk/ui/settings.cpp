@@ -1094,6 +1094,14 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                             "default.",
                 .isDisabled = [] { return !getSettings().game.vrThirdPerson.getValue(); },
             });
+        config_bool_select(leftPane, rightPane, getSettings().game.vrZTargetCameraFocus,
+            {
+                .key = "Z-Target Camera Focus",
+                .helpText = "Z-targeting turns your view to face the target, like the "
+                            "normal game camera does, and keeps turning with it as the "
+                            "target or Link moves. You can still look around freely with "
+                            "the headset. On by default.",
+            });
         // "Attach Body Rotation to Headset" (game.vrAttachBodyRotationToHead) is
         // intentionally not exposed here -- still a real ConfigVar, editable
         // directly in the config file, but now DEFAULTS TO FALSE (disabled).

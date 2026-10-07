@@ -102,6 +102,7 @@ UserSettings g_userSettings = {
         .vrShowBody {"game.vrShowBody", false},
         .vrThirdPerson {"game.vrThirdPerson", false},
         .vrThirdPersonFollowCameraYaw {"game.vrThirdPersonFollowCameraYaw", true},
+        .vrZTargetCameraFocus {"game.vrZTargetCameraFocus", true},
         .vrAttachBodyRotationToHead {"game.vrAttachBodyRotationToHead", false},
         .vrExperimentalCutsceneFirstPerson {"game.vrExperimentalCutsceneFirstPerson", false},
         .vrSwapSwordShieldHands {"game.vrSwapSwordShieldHands", false},
@@ -422,6 +423,7 @@ void registerSettings() {
     Register(g_userSettings.game.vrShowBody);
     Register(g_userSettings.game.vrThirdPerson);
     Register(g_userSettings.game.vrThirdPersonFollowCameraYaw);
+    Register(g_userSettings.game.vrZTargetCameraFocus);
     Register(g_userSettings.game.vrAttachBodyRotationToHead);
     Register(g_userSettings.game.vrExperimentalCutsceneFirstPerson);
     Register(g_userSettings.game.vrSwapSwordShieldHands);
