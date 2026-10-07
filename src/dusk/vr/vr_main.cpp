@@ -31,6 +31,7 @@
 #include "f_pc/f_pc_manager.h"                  // fpcM_DrawIterater, fpcM_Draw
 #include "dusk/game_clock.h"                    // dusk::game_clock::FrameTiming
 #include "dusk/interp/material.h" // replay_models_for_current_view()
+#include "dusk/interp/frame_interpolation.h" // sim_tick_seq()/presentation re-apply -- screen eye pairs
 #include "dusk/settings.h"                      // dusk::getSettings().game.vrDesktopMirror
 #include "dusk/logging.h"                       // DuskLog
 #include <aurora/lib/thread.hpp>                // aurora::thread::native_thread_id_for -- Quest thread hints
@@ -42,6 +43,8 @@
                                                  // longer pulls this in transitively the way it used to
 #include "dusk/ui/ui.hpp"                       // dusk::ui::any_document_visible() -- VR menu billboard gating
 
+#include "dusk/vr/adaptive_screen_resolution.hpp"
+#include "dusk/vr/screen_pair_schedule.hpp"
 #include "dusk/vr/vr_xr_bootstrap.hpp"
 #include "dusk/vr/vr_stereo_render.hpp"         // vr_render::
 #include "dusk/vr/vr_swing_detector.hpp"        // vr_combat::
@@ -50,6 +53,7 @@
 #include "dusk/vr/vr_xr_submit.hpp"             // dusk::vr::Session
 #include "dusk/vr/vr_menu_gamepad.hpp"          // dusk::vr::ensureVrMenuGamepadAttached, etc.
 #include "dusk/vr/vr_main.hpp"
+#include "dusk/vr/vr_screen_ui.hpp"
 
 // TEMP DIAGNOSTIC (VR black-screen-after-save investigation): plain,
 // unmangled, non-namespaced global mirroring g_renderedToHeadsetThisFrame
@@ -113,6 +117,12 @@ static aurora::Module VrLog("dusk::vr");
 
 Session* g_session = nullptr;
 std::unique_ptr<Session> g_ownedSession;  // vr_main.cpp owns the Session; g_session just points to it
+// Transport-only wrapper: borrows the SAME XR session/instance/space/device.
+// Declared after the scene owner so UI handles are released first at shutdown.
+std::unique_ptr<Session> g_uiSession;
+ScreenUiLayout g_screenUiLayout{};
+uint32_t g_maxLayerCount = 0;
+bool g_hasLayerSettings = false;
 // RIGHT hand -> R (shield bash), added 2026-08-13 per explicit user request
 // ("if you thrust the right controller it should press R basically, as R
 // is shield bash"). This is the same infra originally drafted 2026-08-03
@@ -336,6 +346,12 @@ struct PendingFrameSubmit {
     // projection layer; 2 when stereo (one per eye), 0 when not in use.
     uint32_t screenQuadCount = 0;
     XrCompositionLayerQuad screenQuads[2] = {{XR_TYPE_COMPOSITION_LAYER_QUAD}, {XR_TYPE_COMPOSITION_LAYER_QUAD}};
+    bool screenMode = false;
+    bool uiAcquired = false;
+    uint32_t uiSwapchainIndex = 0;
+    uint32_t uiQuadCount = 0;
+    PendingEyeReadback uiCopies[2]{};
+    XrCompositionLayerQuad uiQuads[2]{{XR_TYPE_COMPOSITION_LAYER_QUAD}, {XR_TYPE_COMPOSITION_LAYER_QUAD}};
 };
 PendingFrameSubmit g_pendingSubmit;
 
@@ -345,6 +361,10 @@ PendingFrameSubmit g_pendingSubmit;
 // on, and a Meta-button recentre moves LOCAL space itself.
 bool g_screenAnchorValid = false;
 XrPosef g_screenAnchor{{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 0.f}};
+// Giant Screen scene-eye cache schedule and adaptive per-eye size (see the
+// screen-mode block in tick()).
+ScreenPairScheduler g_screenPairs;
+AdaptiveScreenResolution g_screenResolution;
 
 XrPosef screenAnchorFromHead(const XrPosef& head) {
     const XrQuaternionf& q = head.orientation;
@@ -794,7 +814,25 @@ bool startup() {
             sysProps.next = &spaceWarpProps;
         }
 #endif
-        xrGetSystemProperties(boot.instance, boot.systemId, &sysProps);
+        vr_xr::checkResult(xrGetSystemProperties(boot.instance, boot.systemId, &sysProps),
+                           "xrGetSystemProperties");
+        g_maxLayerCount = sysProps.graphicsProperties.maxLayerCount;
+        if (g_maxLayerCount < 4) {
+            VrLog.error("XR runtime supports {} layers; Giant Screen needs four", g_maxLayerCount);
+            return false;
+        }
+#if DUSK_VR_XR_GRAPHICS_VULKAN
+        g_hasLayerSettings = boot.hasLayerSettings;
+#else
+        g_hasLayerSettings = false;
+#endif
+        g_screenUiLayout = screenUiLayout(sysProps.graphicsProperties.maxSwapchainImageWidth,
+                                         sysProps.graphicsProperties.maxSwapchainImageHeight);
+        if (g_screenUiLayout.hudWidth == 0 || g_screenUiLayout.hudHeight == 0 ||
+            g_screenUiLayout.menuWidth == 0 || g_screenUiLayout.menuHeight == 0) {
+            VrLog.error("XR runtime exposes no usable UI swapchain extent");
+            return false;
+        }
 
         vr_xr::XrGraphicsDevice gfx;
         // Real fix for the CPU-readback round trip this file's own
@@ -968,10 +1006,13 @@ bool startup() {
         // device/queue -- see vr_xr_submit.hpp's Session constructor
         // comment) rather than the D3D12 branch's two decomposed ComPtrs.
         g_ownedSession = std::make_unique<Session>(boot.instance, boot.systemId, session, localSpace, gfx);
+        g_uiSession = std::make_unique<Session>(boot.instance, boot.systemId, session, localSpace, gfx);
 #else
         g_ownedSession = std::make_unique<Session>(boot.instance, boot.systemId, session, localSpace, gfx.device, gfx.commandQueue);
+        g_uiSession = std::make_unique<Session>(boot.instance, boot.systemId, session, localSpace, gfx.device, gfx.commandQueue);
 #endif
         g_ownedSession->setSameDeviceAsAurora(reusedAuroraDevice);
+        g_uiSession->setSameDeviceAsAurora(reusedAuroraDevice);
 #if DUSK_VR_XR_GRAPHICS_VULKAN
         // Shared-image GPU-direct swapchain-copy path (see Session::
         // ensureSharedImageResources()'s comment) -- requires BOTH sides to
@@ -1000,6 +1041,7 @@ bool startup() {
         const bool sharedImageSupported =
             sameGpu && aurora::webgpu::g_vulkanSharedImageExportSupported && gfx.supportsExternalMemoryFd;
         g_ownedSession->setUsesSharedImageGpuDirect(sharedImageSupported);
+        g_uiSession->setUsesSharedImageGpuDirect(sharedImageSupported);
         {
             char msg[256];
             duskVrSnprintf(msg, sizeof(msg),
@@ -1015,6 +1057,7 @@ bool startup() {
         // entirely, this flag is harmless to set (never consulted unless
         // usesSharedImageGpuDirect() is also true).
         g_ownedSession->setSupportsExternalSemaphoreFd(gfx.supportsExternalSemaphoreFd);
+        g_uiSession->setSupportsExternalSemaphoreFd(gfx.supportsExternalSemaphoreFd);
         {
             char msg[160];
             duskVrSnprintf(msg, sizeof(msg),
@@ -1047,11 +1090,13 @@ bool startup() {
         // "SteamVR/OpenXR : oculus", etc. across driver versions), not a
         // stable enum.
         g_ownedSession->setIsSteamVr(std::strstr(sysProps.systemName, "SteamVR") != nullptr);
+        g_uiSession->setIsSteamVr(std::strstr(sysProps.systemName, "SteamVR") != nullptr);
         // Registers the encoder task type backing encodeEyeCopy()'s Dawn-side
         // copy (see vr_xr_submit.hpp's Session::registerCpuCopyEncoderTask).
         // Must happen before the first endEye()/encodeEyeCopy() call, which
         // this satisfies since tick() can't run until g_session is set below.
         g_ownedSession->registerCpuCopyEncoderTask();
+        g_uiSession->registerUiCopyEncoderTask();
         // NOTE: initSession() (which sets g_session, and therefore isActive())
         // is deliberately NOT called here yet -- see below. It used to be
         // called immediately after construction, which meant isActive() could
@@ -1116,6 +1161,12 @@ bool startup() {
         // Real pixel format, cross-checked against Aurora's actual color target
         // instead of the previously-assumed RGBA8Unorm.
         const int64_t dxgiFormat = toDxgiSwapchainFormat(aurora::gfx::color_format());
+        if (eyeWidth * 2 > sysProps.graphicsProperties.maxSwapchainImageWidth ||
+            eyeHeight > sysProps.graphicsProperties.maxSwapchainImageHeight ||
+            !g_uiSession->createSwapchain(g_screenUiLayout.width(), g_screenUiLayout.height(), dxgiFormat)) {
+            VrLog.error("XR scene/UI swapchains exceed runtime limits or UI swapchain creation failed");
+            return false;
+        }
 
         if (!g_ownedSession->createSwapchain(eyeWidth * 2, eyeHeight, dxgiFormat)) {
             // TEMP DIAGNOSTIC (v8, remove once confirmed working): xrCreateSwapchain
@@ -1504,8 +1555,7 @@ static bool spaceWarpEncodeFrame(const vr_render::StereoParams& sp, const aurora
 #endif  // DUSK_VR_XR_GRAPHICS_VULKAN
 }  // namespace
 
-static aurora::gfx::ResolvedTargets renderScreenModeGamePass(uint32_t width, uint32_t height,
-                                                             bool menuVisible, int eye = 0) {
+static aurora::gfx::ResolvedTargets renderScreenModeGamePass(uint32_t width, uint32_t height, int eye = 0) {
     view_class* view = dComIfGd_getView();
     if (view == nullptr) {
         return {};
@@ -1575,13 +1625,89 @@ static aurora::gfx::ResolvedTargets renderScreenModeGamePass(uint32_t width, uin
     dusk::interp::material::replay_models_for_current_view();
     fpcM_DrawIterater((fpcM_DrawIteraterFunc)fpcM_Draw);
     cAPIGph_Painter();
-    if (menuVisible) {
-        vr_render::drawMenuScreenOverlay();
-    }
     aurora::gfx::ResolvedTargets targets = vr_render::endScreenModePass();
     g_duskVRScreenModePassOpen = false;
     restoreCamera();
     return targets;
+}
+
+static void encodeScreenUiLayers(const XrCompositionLayerQuad& screen, bool menuVisible) {
+    Session& ui = *g_uiSession;
+    XrSwapchainImageAcquireInfo acquireInfo{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
+    uint32_t index = 0;
+    if (XR_FAILED(xrAcquireSwapchainImage(ui.swapchain(), &acquireInfo, &index))) {
+        duskVrLog("[dusk::vr] UI swapchain acquisition failed\n");
+        return;
+    }
+    XrSwapchainImageWaitInfo waitInfo{XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
+    waitInfo.timeout = XR_INFINITE_DURATION;
+    if (XR_FAILED(xrWaitSwapchainImage(ui.swapchain(), &waitInfo))) {
+        duskVrLog("[dusk::vr] UI swapchain wait failed\n");
+        XrSwapchainImageReleaseInfo releaseInfo{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
+        xrReleaseSwapchainImage(ui.swapchain(), &releaseInfo);
+        return;
+    }
+    g_pendingSubmit.uiAcquired = true;
+    g_pendingSubmit.uiSwapchainIndex = index;
+#if DUSK_VR_XR_GRAPHICS_VULKAN
+    if (ui.usesSharedImageGpuDirect()) {
+#else
+    if (ui.usesGpuDirectSwapchainCopy()) {
+#endif
+        ui.beginSwapchainAccessForFrame(index, g_screenUiLayout.width(), g_screenUiLayout.height());
+    }
+
+    auto copyLayer = [&](const wgpu::Texture& texture, uint32_t slot, uint32_t width, uint32_t height,
+                         uint32_t dstX, bool hud, float aspect) {
+        if (!texture || !ui.encodeUiCopy(texture, slot, index, width, height, dstX, hud)) {
+            return;
+        }
+        g_pendingSubmit.uiCopies[slot] =
+            PendingEyeReadback{true, slot, index, width, height, dstX, g_screenUiLayout.width()};
+        auto& q = g_pendingSubmit.uiQuads[g_pendingSubmit.uiQuadCount++];
+        q = XrCompositionLayerQuad{XR_TYPE_COMPOSITION_LAYER_QUAD};
+        q.space = screen.space;
+        q.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+        q.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+        if (hud) {
+            q.layerFlags |= XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
+        }
+        q.subImage.swapchain = ui.swapchain();
+        q.subImage.imageRect = {{static_cast<int32_t>(dstX), 0},
+                               {static_cast<int32_t>(width), static_cast<int32_t>(height)}};
+        q.pose = screen.pose;
+        q.size = screen.size;
+        if (!hud) {
+            q.size.width = std::min(screen.size.width, screen.size.height / aspect);
+            q.size.height = q.size.width * aspect;
+        }
+    };
+
+    // Same GameCube draw-list content as captureHudBillboard(), but resolved
+    // directly at UI density instead of copying a 608x448 GX texture back out.
+    // This pass is independent of scene cadence/resolution and never nests.
+    if (vr_render::beginScreenModePass(g_screenUiLayout.hudWidth, g_screenUiLayout.hudHeight)) {
+        g_duskVRScreenModePassOpen = true;
+        mDoGph_gInf_c::drawHudScreenLayer();
+        const auto hud = vr_render::endScreenModePass();
+        g_duskVRScreenModePassOpen = false;
+        copyLayer(hud.colorTexture, 0, g_screenUiLayout.hudWidth, g_screenUiLayout.hudHeight,
+                  0, true, 9.0f / 16.0f);
+    }
+    if (menuVisible) {
+        // RmlUi renders once in aurora_end_frame; consume its completed previous
+        // frame without advancing input/animation a second time or a GX bridge.
+        const auto& menu = aurora::rmlui::get_render_target();
+        const auto size = fitScreenUi(menu.size.width, menu.size.height,
+                                      g_screenUiLayout.menuWidth, g_screenUiLayout.menuHeight);
+        if (menu.texture && size.width != 0 && size.height != 0) {
+            copyLayer(menu.texture, 1, size.width, size.height, g_screenUiLayout.hudWidth,
+                      false, static_cast<float>(menu.size.height) / menu.size.width);
+        }
+    }
+    // The XR menu must stay UI-only; its backdrop must not bake the scene/mirror
+    // back into this independently composed texture.
+    aurora::rmlui::set_force_no_backdrop(true);
 }
 
 void tick(const dusk::game_clock::FrameTiming& pacing) {
@@ -1753,6 +1879,9 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     // vr_xr_submit.hpp's steamVrGammaExponent_ comment) -- deliberately a
     // separate call/separate ConfigVar from the one above, never coupled.
     g_session->setSteamVrGammaCompensationExponent(
+        dusk::getSettings().game.vrGammaCompensationSteamVr.getValue());
+    g_uiSession->setGammaCompensationMultiplier(dusk::getSettings().game.vrGammaCompensation.getValue());
+    g_uiSession->setSteamVrGammaCompensationExponent(
         dusk::getSettings().game.vrGammaCompensationSteamVr.getValue());
 
     XrFrameBeginInfo beginInfo{XR_TYPE_FRAME_BEGIN_INFO};
@@ -3036,6 +3165,11 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     std::vector<XrCompositionLayerProjectionView> projViews(viewCount);
     std::vector<PendingEyeReadback> pendingEyes(viewCount);
     g_pendingSubmit.spaceWarp = false;
+    g_pendingSubmit.uiAcquired = false;
+    g_pendingSubmit.uiQuadCount = 0;
+    for (auto& copy : g_pendingSubmit.uiCopies) {
+        copy = {};
+    }
 
     // Advance the HUD billboard's damped reference direction once per frame
     // (not per eye) -- see vr_stereo_render.hpp's updateHudSmoothing()/
@@ -3130,7 +3264,7 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     // in-headset, so this now copies the REAL RmlUi content each frame.
     // Gated on menuVisible (computed earlier this frame, above, for the
     // menu-gamepad call) so this costs nothing when no document is open.
-    if (menuVisible) {
+    if (menuVisible && !screenMode) {
         vr_render::ensureAndCopyMenuBillboardTexture();
     }
 
@@ -3141,57 +3275,145 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         // quad layer fixed in the room. No eye passes are rendered at all,
         // and the compositor samples the picture once at panel density.
         const bool stereo = dusk::getSettings().game.vrScreenModeStereo.getValue() && viewCount == 2;
-        const uint32_t screenWidth = stereo ? 1280u : 1600u;
-        const uint32_t screenHeight = stereo ? 720u : 900u;
+        const wgpu::TextureFormat format = aurora::gfx::color_format();
+        // Per-eye size, lowered under missed refreshes and fitted to the swapchain
+        // area each eye image is copied into; the scheduler adopts a new size only
+        // at a pair boundary.
+        const ScreenResolution requested =
+            g_screenResolution.resolution(stereo ? 1280u : 1600u, stereo ? 720u : 900u,
+                                          stereo ? g_eyeImageWidth : g_eyeImageWidth * 2, g_eyeImageHeight);
 
         if (!g_screenAnchorValid) {
             g_screenAnchor = screenAnchorFromHead(hmdPose);
             g_screenAnchorValid = true;
         }
 
-        const uint32_t passCount = stereo ? 2u : 1u;
-        for (uint32_t i = 0; i < passCount; ++i) {
+        // Scene-eye cache (screen_pair_schedule.hpp): the published image set is
+        // re-copied into every newly acquired swapchain image, so once warm at most
+        // one eye is re-rendered per refresh (mono: every other refresh). A stereo
+        // pair is published only when both eyes show one scene state: the second
+        // eye re-presents the interpolated scene at the first eye's step, which
+        // the scheduler only allows while no sim tick/epoch/sync change happened
+        // in between. Without the GPU-direct copy path or an open presentation to
+        // re-apply, every eye renders every refresh as before.
+        const bool canRepresent = dusk::interp::is_enabled() && dusk::interp::is_presentation_active();
+        ScreenPairInput pairInput;
+        pairInput.cacheable = g_session->supportsScreenModeCache() && (!stereo || canRepresent);
+        pairInput.stereo = stereo;
+        pairInput.width = requested.width;
+        pairInput.height = requested.height;
+        pairInput.gammaExponent = g_session->screenModeGammaExponent();
+        pairInput.stereoDepth = dusk::getSettings().game.vrScreenModeDepth.getValue();
+        pairInput.simTick = dusk::interp::sim_tick_seq();
+        pairInput.presentationEpoch = pacing.presentationEpoch;
+        pairInput.interpolationStep = dusk::interp::get_interpolation_step();
+        pairInput.presentationSync = dusk::interp::presentation_sync_active();
+        ScreenPairPlan plan = g_screenPairs.begin(pairInput);
+        if (plan.cacheable && !g_session->prepareScreenModeCache(plan.width, plan.height, plan.stereo, format)) {
+            pairInput.cacheable = false;
+            plan = g_screenPairs.begin(pairInput);
+        }
+
+        const uint32_t eyeCount = stereo ? 2u : 1u;
+        uint32_t renderedMask = 0;
+        for (uint32_t i = 0; i < eyeCount; ++i) {
+            if ((plan.renderMask & (1u << i)) == 0) {
+                continue;
+            }
+            if (plan.freezePresentation) {
+                dusk::interp::end_presentation();
+                dusk::interp::begin_presentation(plan.frozenStep);
+            }
             const aurora::gfx::ResolvedTargets t =
-                renderScreenModeGamePass(screenWidth, screenHeight, menuVisible, static_cast<int>(i));
-            pendingEyes[i] = PendingEyeReadback{};
+                renderScreenModeGamePass(plan.width, plan.height, static_cast<int>(i));
+            if (plan.freezePresentation) {
+                dusk::interp::end_presentation();
+                dusk::interp::begin_presentation(pairInput.interpolationStep);
+            }
             if (!t.colorTexture) {
                 continue;
             }
-            const uint32_t dstX = i * screenWidth;
+            const uint32_t dstX = i * plan.width;
+            if (plan.cacheable) {
+                if (g_session->encodeScreenModeEyeRender(t.colorTexture, i, plan.renderGeneration, swapchainIndex,
+                                                         plan.width, plan.height, dstX, format)) {
+                    renderedMask |= 1u << i;
+                }
+                continue;
+            }
 #if !DUSK_VR_XR_GRAPHICS_VULKAN
             if (g_session->usesGpuDirectSwapchainCopy()) {
 #else
             if (g_session->usesSharedImageGpuDirect()) {
 #endif
-                g_session->encodeSwapchainCopy(t.colorTexture, i, swapchainIndex, screenWidth, screenHeight, dstX,
-                                               aurora::gfx::color_format());
+                g_session->encodeSwapchainCopy(t.colorTexture, i, swapchainIndex, plan.width, plan.height, dstX,
+                                               format);
             } else {
-                g_session->encodeEyeCopy(t.colorTexture, i, swapchainIndex, screenWidth, screenHeight, dstX,
-                                         aurora::gfx::color_format());
+                g_session->encodeEyeCopy(t.colorTexture, i, swapchainIndex, plan.width, plan.height, dstX, format);
             }
-            pendingEyes[i] = PendingEyeReadback{true, i, swapchainIndex, screenWidth, screenHeight, dstX,
+            pendingEyes[i] = PendingEyeReadback{true, i, swapchainIndex, plan.width, plan.height, dstX,
                                                 g_eyeImageWidth * 2};
+            renderedMask |= 1u << i;
         }
+
+        // Quads are submitted only over complete eye images in this frame's image.
+        uint32_t quadCount = renderedMask == (stereo ? 3u : 1u) ? eyeCount : 0u;
+        bool quadStereo = stereo;
+        uint32_t quadWidth = plan.width;
+        uint32_t quadHeight = plan.height;
+        if (plan.cacheable) {
+            g_screenPairs.complete(plan, renderedMask);
+            quadCount = 0;
+            if (g_screenPairs.frontValid()) {
+                quadStereo = g_screenPairs.stereo();
+                quadWidth = g_screenPairs.width();
+                quadHeight = g_screenPairs.height();
+                const uint32_t frontEyes = quadStereo ? 2u : 1u;
+                bool copied = true;
+                for (uint32_t i = 0; i < frontEyes && copied; ++i) {
+                    const uint32_t dstX = i * quadWidth;
+                    copied = g_session->encodeScreenModeEyeCopy(i, g_screenPairs.frontGeneration(), swapchainIndex,
+                                                                quadWidth, quadHeight, dstX);
+                    pendingEyes[i] = PendingEyeReadback{copied, i, swapchainIndex, quadWidth, quadHeight, dstX,
+                                                        g_eyeImageWidth * 2};
+                }
+                if (copied) {
+                    quadCount = frontEyes;
+                } else {
+                    g_screenPairs.invalidate();
+                }
+            }
+        }
+        g_screenResolution.observe(frameState.predictedDisplayTime, frameState.predictedDisplayPeriod,
+                                   g_perfWaitFrameMs, plan.cacheable && quadCount > 0);
 
         const float width = vr_render::kScreenModeWidthMeters *
                             std::clamp(dusk::getSettings().game.vrScreenModeWidth.getValue(), 0.5f, 2.5f);
         const float dist = vr_render::kScreenModeDistanceMeters *
                            std::clamp(dusk::getSettings().game.vrScreenModeDistance.getValue(), 0.5f, 2.5f);
-        g_pendingSubmit.screenQuadCount = passCount;
-        for (uint32_t i = 0; i < passCount; ++i) {
+        g_pendingSubmit.screenQuadCount = quadCount;
+        for (uint32_t i = 0; i < quadCount; ++i) {
             XrCompositionLayerQuad& q = g_pendingSubmit.screenQuads[i];
             q = XrCompositionLayerQuad{XR_TYPE_COMPOSITION_LAYER_QUAD};
             q.space = base;
-            q.eyeVisibility = !stereo ? XR_EYE_VISIBILITY_BOTH : (i == 0 ? XR_EYE_VISIBILITY_LEFT : XR_EYE_VISIBILITY_RIGHT);
+            q.eyeVisibility = !quadStereo ? XR_EYE_VISIBILITY_BOTH
+                                          : (i == 0 ? XR_EYE_VISIBILITY_LEFT : XR_EYE_VISIBILITY_RIGHT);
             q.subImage.swapchain = g_session->swapchain();
             q.subImage.imageArrayIndex = 0;
-            q.subImage.imageRect.offset = {static_cast<int32_t>(i * screenWidth), 0};
-            q.subImage.imageRect.extent = {static_cast<int32_t>(screenWidth), static_cast<int32_t>(screenHeight)};
+            q.subImage.imageRect.offset = {static_cast<int32_t>(i * quadWidth), 0};
+            q.subImage.imageRect.extent = {static_cast<int32_t>(quadWidth), static_cast<int32_t>(quadHeight)};
             q.pose = screenPoseAt(g_screenAnchor, dist);
             q.size = {width, width * 9.0f / 16.0f};
         }
+        if (quadCount > 0) {
+            encodeScreenUiLayers(g_pendingSubmit.screenQuads[0], menuVisible);
+        }
     } else {
         g_screenAnchorValid = false;
+        // The immersive eye path reuses the Session copy slots the cache lives in.
+        g_screenPairs.invalidate();
+        g_screenResolution.observe(frameState.predictedDisplayTime, frameState.predictedDisplayPeriod,
+                                   g_perfWaitFrameMs, false);
         g_pendingSubmit.screenQuadCount = 0;
     }
     // Desktop mirror: captured from eye 0 (left) inside the loop below,
@@ -3355,11 +3577,6 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         PerfClock::time_point perfEyeT1 = PerfClock::now();
         g_perfEyeBeginMs += perfMs(perfEyeT0, perfEyeT1);
 
-        if (screenMode) {
-            const auto screenDrawStart = PerfClock::now();
-            vr_render::drawScreenModeBillboard(static_cast<int>(eye));
-            g_perfEyePainterMs += perfMs(screenDrawStart, PerfClock::now());
-        } else {
         fpcM_DrawIterater((fpcM_DrawIteraterFunc)fpcM_Draw);
         PerfClock::time_point perfEyeT2 = PerfClock::now();
         g_perfEyeIterMs += perfMs(perfEyeT1, perfEyeT2);
@@ -3409,7 +3626,6 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
             }
             vr_render::drawMenuBillboard(&vr_render::g_menuBillboardTexObj,
                                           vr_render::g_menuBillboardAspectHeightOverWidth);
-        }
         }
 
         // TODO: inject hand mesh before resolving the pass:
@@ -3575,6 +3791,7 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     g_pendingSubmit.frameState = frameState;
     g_pendingSubmit.base = base;
     g_pendingSubmit.viewCount = viewCount;
+    g_pendingSubmit.screenMode = screenMode;
     g_hasPendingFrameSubmit = true;
     g_perfTickEnd = PerfClock::now();
 }
@@ -3681,6 +3898,38 @@ void submitFrame() {
     }
 #endif
 
+    if (g_pendingSubmit.uiAcquired) {
+        Session& ui = *g_uiSession;
+        bool preserve = false;
+        for (const auto& copy : g_pendingSubmit.uiCopies) {
+            if (copy.valid) {
+                ui.readbackEyeCopy(copy.eyeIndex, copy.swapchainIndex, copy.eyeWidth, copy.eyeHeight,
+                                   copy.dstXOffset, aurora::gfx::color_format(), preserve);
+                preserve = true;
+            }
+        }
+#if DUSK_VR_XR_GRAPHICS_VULKAN
+        if (ui.usesSharedImageGpuDirect()) {
+            ui.finishSharedImageGpuCopy(g_pendingSubmit.uiSwapchainIndex,
+                                        g_screenUiLayout.width(), g_screenUiLayout.height());
+        }
+#endif
+        ui.endAccessAll();
+#if !DUSK_VR_XR_GRAPHICS_VULKAN
+        if (ui.usesIntermediateSwapchainCopy()) {
+            ui.finishIntermediateSwapchainCopy(g_pendingSubmit.uiSwapchainIndex,
+                                               g_screenUiLayout.width(), g_screenUiLayout.height());
+        }
+#endif
+        XrSwapchainImageReleaseInfo releaseUi{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
+        if (XR_FAILED(xrReleaseSwapchainImage(ui.swapchain(), &releaseUi))) {
+            // Do not submit a layer referencing an image that wasn't released.
+            g_pendingSubmit.uiQuadCount = 0;
+            duskVrLog("[dusk::vr] UI swapchain release failed\n");
+        }
+        g_pendingSubmit.uiAcquired = false;
+    }
+
     XrSwapchainImageReleaseInfo releaseInfo{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
     // TEMP DIAGNOSTIC (this session): see tick()'s matching comment above.
     if (XR_FAILED(xrReleaseSwapchainImage(g_session->swapchain(), &releaseInfo))) {
@@ -3712,15 +3961,30 @@ void submitFrame() {
     projLayer.viewCount = g_pendingSubmit.viewCount;
     projLayer.views = g_pendingSubmit.projViews.data();
 
-    const XrCompositionLayerBaseHeader* layers[2] = {
-        reinterpret_cast<const XrCompositionLayerBaseHeader*>(&projLayer), nullptr};
-    uint32_t layerCount = 1;
-    if (g_pendingSubmit.screenQuadCount > 0) {
-        layerCount = g_pendingSubmit.screenQuadCount;
-        for (uint32_t i = 0; i < layerCount; ++i) {
-            layers[i] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&g_pendingSubmit.screenQuads[i]);
+    XrCompositionLayerSettingsFB sceneFilter{XR_TYPE_COMPOSITION_LAYER_SETTINGS_FB};
+    sceneFilter.layerFlags = XR_COMPOSITION_LAYER_SETTINGS_NORMAL_SHARPENING_BIT_FB;
+    XrCompositionLayerSettingsFB uiFilter{XR_TYPE_COMPOSITION_LAYER_SETTINGS_FB};
+    uiFilter.layerFlags = XR_COMPOSITION_LAYER_SETTINGS_QUALITY_SUPER_SAMPLING_BIT_FB;
+    const bool filters = g_hasLayerSettings && dusk::getSettings().game.vrSuperResolution.getValue();
+    projLayer.next = filters ? &sceneFilter : nullptr;
+
+    const XrCompositionLayerBaseHeader* layers[4]{};
+    uint32_t layerCount = 0;
+    if (!g_pendingSubmit.screenMode) {
+        layers[layerCount++] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&projLayer);
+    } else {
+        for (uint32_t i = 0; i < g_pendingSubmit.screenQuadCount; ++i) {
+            auto& q = g_pendingSubmit.screenQuads[i];
+            q.next = filters ? &sceneFilter : nullptr;
+            layers[layerCount++] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&q);
+        }
+        for (uint32_t i = 0; i < g_pendingSubmit.uiQuadCount; ++i) {
+            auto& q = g_pendingSubmit.uiQuads[i];
+            q.next = filters ? &uiFilter : nullptr;
+            layers[layerCount++] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&q);
         }
     }
+    assert(layerCount <= std::size(layers) && layerCount <= g_maxLayerCount);
 
     XrFrameEndInfo endInfo{XR_TYPE_FRAME_END_INFO};
     endInfo.displayTime = g_pendingSubmit.frameState.predictedDisplayTime;

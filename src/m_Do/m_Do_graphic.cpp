@@ -2313,6 +2313,10 @@ static void mDoGph_drawHud2D() {
 }
 
 #if TARGET_PC
+void mDoGph_gInf_c::drawHudScreenLayer() {
+    mDoGph_drawHud2D();
+}
+
 // Renders the flat 2D HUD into a small, alpha-preserving offscreen texture
 // once per frame, so both VR eyes can draw it as a single shared stereo
 // billboard (vr_render::drawHudBillboard(), called from mDoGph_Painter()'s
@@ -3113,11 +3117,10 @@ int mDoGph_Painter() {
     }
     #endif
 
-    // Screen mode keeps the flat HUD inside the game image; immersive VR
-    // instead shares one cached HUD texture across the eye passes.
-    if (!dusk::vr::isRenderingToHeadset() || dusk::vr::isVrScreenMode()) {
+    // Giant Screen submits the HUD separately; immersive VR keeps its billboard.
+    if (!dusk::vr::isRenderingToHeadset()) {
         mDoGph_drawHud2D();
-    } else {
+    } else if (!dusk::vr::isVrScreenMode()) {
         dusk::vr::drawHudBillboard(mDoGph_gInf_c::getHudBillboardTexObj());
     }
 
