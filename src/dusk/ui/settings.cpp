@@ -938,11 +938,17 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         auto& leftPane = add_child<Pane>(content, Pane::Type::Controlled);
         auto& rightPane = add_child<Pane>(content, Pane::Type::Uncontrolled);
 
+        leftPane.add_section("Display");
+        config_bool_select(leftPane, rightPane, getSettings().game.vrScreenMode,
+            {
+                .key = "Giant Screen Mode",
+                .helpText = "Shows flat-camera gameplay on a large 16:9 screen about 5.3 m wide and 4.5 m away. "
+                            "The screen follows your head; the room stays black. Switches live."
+            });
 #if !VR_SETTINGS_STANDALONE
         // Standalone (Quest) has no desktop window to mirror to. The setting itself stays
         // registered and defaults ON there -- the mirror path also drives the Dusklight overlay's
         // scaling -- it's just not user-facing.
-        leftPane.add_section("Display");
         config_bool_select(leftPane, rightPane, getSettings().game.vrDesktopMirror,
             {
                 .key = "VR Desktop Mirror",

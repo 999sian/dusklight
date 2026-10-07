@@ -289,6 +289,9 @@ struct UserSettings {
         // set_present_source_mirror()) -- no extra render pass, no CPU
         // readback, near-zero cost.
         ConfigVar<bool> vrDesktopMirror;
+        // Renders flat-camera gameplay onto a large 16:9 screen in the headset.
+        // It can be toggled live; immersive VR behavior is disabled while selected.
+        ConfigVar<bool> vrScreenMode;
         // Renders both VR eyes in ONE scene pass (instanced per eye into a
         // double-wide target, see vr_render::beginStereoPass()) instead of
         // traversing and recording the whole scene twice per frame. The

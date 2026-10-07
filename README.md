@@ -20,6 +20,7 @@ More on why it uses AI generated code below.
 - Physical sword swinging, shield bashing and aiming (aim with the right hand)
 - Quest 2/3 controller bindings; other headsets are untested
 - The ability to play the game in flatscreen for parts you want to skip in VR
+- Giant Screen mode: normal game camera and controls on a 5.3 m-wide 16:9 screen 4.5 m away
 # Quest 2/3 Controller binds
 <div align="center">
 <img src="Controller binding.png" alt="Logo" width="400">
