@@ -3074,7 +3074,10 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     }
 
     if (screenMode) {
-        const uint32_t screenHeight = std::max(720u, (g_eyeImageHeight / 36u) * 36u);
+        // The screen spans ~61 degrees, about half the eye's vertical FOV, so
+        // half the eye height roughly matches panel pixel density. A multiple
+        // of 9 keeps the 16:9 width exact.
+        const uint32_t screenHeight = std::max(720u, (g_eyeImageHeight / 2u / 9u) * 9u);
         const uint32_t screenWidth = screenHeight * 16u / 9u;
         const aurora::gfx::ResolvedTargets screenTargets =
             renderScreenModeGamePass(screenWidth, screenHeight, menuVisible);
