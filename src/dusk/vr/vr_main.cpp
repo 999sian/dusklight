@@ -41,8 +41,10 @@
 #include <aurora/lib/logging.hpp>               // aurora::Module, see VrLog below -- dusk/logging.h's
                                                  // own DuskLog moved to borealis::Log in 2.0 and no
                                                  // longer pulls this in transitively the way it used to
+#include <aurora/lib/gfx/render_worker.hpp>     // render_worker::enqueue_work -- foveation map upload
 #include "dusk/ui/ui.hpp"                       // dusk::ui::any_document_visible() -- VR menu billboard gating
 
+#include "dusk/vr/foveation_map.hpp"
 #include "dusk/vr/adaptive_screen_resolution.hpp"
 #include "dusk/vr/screen_pair_schedule.hpp"
 #include "dusk/vr/vr_xr_bootstrap.hpp"
@@ -1084,6 +1086,20 @@ bool startup() {
             duskVrLog(msg);
         }
 #endif
+        // Fixed foveated rendering: device feature (aurora requested it at
+        // device creation when the adapter has it) x game.vrFoveation. Applied
+        // only to the single-pass direct-render eye pass; the perf line's
+        // ffr= shows the level actually used per frame.
+        {
+            const bool fdm = aurora::gfx::supports_fragment_density_map();
+            const int level = std::clamp(dusk::getSettings().game.vrFoveation.getValue(), 0, 3);
+            char msg[200];
+            duskVrSnprintf(msg, sizeof(msg),
+                        "[dusk::vr::startup] fixed foveated rendering (VK_EXT_fragment_density_map): %s, "
+                        "level %d -> %s\n",
+                        fdm ? "supported" : "unsupported", level, fdm && level > 0 ? "ACTIVE" : "off");
+            duskVrLog(msg);
+        }
         // Real "is this SteamVR" signal for Session::effectiveGammaExponent()
         // -- see isSteamVr_'s own comment (vr_xr_submit.hpp) for why this can
         // no longer be inferred from which swapchain format ended up chosen.
@@ -1345,6 +1361,8 @@ double g_perfWaitFrameMs = 0, g_perfSwapWaitMs = 0, g_perfPreLoopMs = 0;
 double g_perfEyeIterMs = 0, g_perfEyePainterMs = 0, g_perfEyeEndMs = 0, g_perfEyeBeginMs = 0;
 // Per-eye render size this frame (adaptive eye resolution), for the perf line.
 uint32_t g_perfEyeWidth = 0, g_perfEyeHeight = 0;
+// Foveation level applied to this frame's eye pass (0 = none), for the perf line.
+int g_perfFoveation = 0;
 PerfClock::time_point g_perfMark;
 // Mid-section laps (ms) between xrBeginFrame and the swapchain acquire:
 // 0=locate spaces (+xrSyncActions), 1=action reads, 2=menu gamepad/swing/pad,
@@ -1557,6 +1575,67 @@ static bool spaceWarpEncodeFrame(const vr_render::StereoParams& sp, const aurora
     return g_session->spaceWarpEncode(targets.depth, u);
 }
 #endif  // DUSK_VR_XR_GRAPHICS_VULKAN
+
+#if AURORA_HAS_FRAGMENT_DENSITY_MAP
+// Fixed foveated rendering (game.vrFoveation): the density map for the
+// single-pass direct-render eye pass (see foveation_map.hpp). One cached map,
+// rebuilt when the target size (adaptive-resolution tier), the level or an
+// eye's projection centre (in 16px map texels) changes.
+struct FoveationMapCache {
+    uint32_t width = 0;
+    uint32_t height = 0;
+    int level = 0;
+    dusk::vr::FoveationCenter centers[2];
+    wgpu::TextureView view;
+};
+FoveationMapCache g_foveationMap;
+
+// Null when the setting is off or the device lacks the feature.
+wgpu::TextureView foveationDensityMap(uint32_t width, uint32_t height, const std::array<XrFovf, 2>& fov, int level) {
+    if (level <= 0 || !aurora::gfx::supports_fragment_density_map()) {
+        return {};
+    }
+    dusk::vr::FoveationCenter centers[2];
+    for (int eye = 0; eye < 2; ++eye) {
+        centers[eye] = dusk::vr::foveationCenter(eye, width, height, fov[eye].angleLeft, fov[eye].angleRight,
+                                                 fov[eye].angleUp, fov[eye].angleDown);
+    }
+    FoveationMapCache& cache = g_foveationMap;
+    if (cache.view && cache.width == width && cache.height == height && cache.level == level &&
+        cache.centers[0] == centers[0] && cache.centers[1] == centers[1]) {
+        return cache.view;
+    }
+
+    const uint32_t mapWidth = dusk::vr::foveationMapSize(width);
+    const uint32_t mapHeight = dusk::vr::foveationMapSize(height);
+    const wgpu::TextureDescriptor desc{
+        .label = "VR foveation density map",
+        .usage = wgpu::TextureUsage::FragmentDensityMap | wgpu::TextureUsage::CopyDst,
+        .size = {mapWidth, mapHeight, 1},
+        .format = wgpu::TextureFormat::RG8Unorm,
+    };
+    wgpu::Texture texture = aurora::gfx::device().CreateTexture(&desc);
+    // Written on the render worker: it owns Dawn's queue (aurora requests no
+    // implicit device synchronization), and its FIFO puts the write ahead of
+    // this frame's eye pass.
+    aurora::gfx::render_worker::enqueue_work(
+        [texture, rg = dusk::vr::buildFoveationMap(width, height, centers, level), mapWidth, mapHeight] {
+            const wgpu::TexelCopyTextureInfo dst{.texture = texture};
+            const wgpu::TexelCopyBufferLayout layout{.bytesPerRow = mapWidth * 2, .rowsPerImage = mapHeight};
+            const wgpu::Extent3D size{mapWidth, mapHeight, 1};
+            aurora::gfx::queue().WriteTexture(&dst, rg.data(), rg.size(), &layout, &size);
+        });
+    cache = {width, height, level, {centers[0], centers[1]}, texture.CreateView()};
+
+    char msg[200];
+    duskVrSnprintf(msg, sizeof(msg),
+                   "[dusk::vr] foveation map %ux%u for a %ux%u eye pass, level %d, centres (%d,%d) (%d,%d)\n",
+                   mapWidth, mapHeight, width, height, level, centers[0].x, centers[0].y, centers[1].x,
+                   centers[1].y);
+    duskVrLog(msg);
+    return cache.view;
+}
+#endif
 }  // namespace
 
 static aurora::gfx::ResolvedTargets renderScreenModeGamePass(uint32_t width, uint32_t height, int eye = 0) {
@@ -3130,6 +3209,7 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     const uint32_t renderEyeHeight = std::max(eyeSize.height & ~7u, 8u);
     g_perfEyeWidth = renderEyeWidth;
     g_perfEyeHeight = renderEyeHeight;
+    g_perfFoveation = 0;
 
     // GPU-direct swapchain copy (usesGpuDirectSwapchainCopy() -- see
     // Session::sameDeviceAsAurora_'s comment): open access to this frame's
@@ -3483,6 +3563,16 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         // gamma/channel work; those keep the pooled target + copy below.
         aurora::gfx::ExternalPassTarget directTarget;
         const bool directRender = g_session->sharedImageRenderTarget(&directTarget);
+#if AURORA_HAS_FRAGMENT_DENSITY_MAP
+        // Fixed foveated rendering: the direct-render target only (the pooled
+        // fallback below and the two-pass path stay unfoveated).
+        if (directRender) {
+            const int level = std::clamp(dusk::getSettings().game.vrFoveation.getValue(), 0, 3);
+            directTarget.densityMap =
+                foveationDensityMap(directTarget.width, directTarget.height, stereoParams.eyeFov, level);
+            g_perfFoveation = directTarget.densityMap ? level : 0;
+        }
+#endif
 
         g_duskVRCurrentEyeIndex = 0;
         g_perfPreLoopMs = perfMs(g_perfMark, PerfClock::now());
@@ -4064,13 +4154,14 @@ void submitFrame() {
                 "[dusk::vr::perf] %s total=%.1f setup=%.1f(waitFrame=%.1f swapWait=%.1f "
                 "beginFrame=%.1f syncActions=%.1f hmd=%.1f ctrl=%.1f mid=%.1f/%.1f/%.1f) "
                 "renderEnc=%.1f(preLoop=%.1f begin=%.1f iter=%.1f painter=%.1f end=%.1f) "
-                "gap=%.1f sync=%.1f submit=%.1f sim=%d cull=%u/%u eye=%ux%u(%u%%) "
+                "gap=%.1f sync=%.1f submit=%.1f sim=%d cull=%u/%u eye=%ux%u(%u%%) ffr=%d "
                 "worker(enc=%.1f finish=%.1f submit=%.1f wall=%.1f draws=%u merged=%u passes=%u maxPassDraws=%u)\n",
                 dip ? "DIP" : "base", totalMs, setupMs, g_perfWaitFrameMs, g_perfSwapWaitMs,
                 g_perfMid[5], g_perfMid[1], g_perfMid[6], g_perfMid[0], g_perfMid[2], g_perfMid[3], g_perfMid[4],
                 renderEncMs, g_perfPreLoopMs, g_perfEyeBeginMs, g_perfEyeIterMs, g_perfEyePainterMs,
                 g_perfEyeEndMs, gapMs, syncMs, submitMs, g_perfNumSimTicks, cullRejected, cullTested,
                 g_perfEyeWidth, g_perfEyeHeight, (g_perfEyeWidth * 100 + g_eyeImageWidth / 2) / g_eyeImageWidth,
+                g_perfFoveation,
                 ws.encodeMs, ws.finishMs, ws.submitMs, ws.wallMs, ws.drawCalls, ws.mergedDrawCalls, ws.renderPasses, ws.maxPassDraws);
             duskVrLog(msg);
         }

@@ -99,6 +99,13 @@ constexpr std::array kVrLightingModeLabels = {
     "Follow Look",
 };
 
+constexpr std::array kVrFoveationLabels = {
+    "Off",
+    "Low",
+    "Medium",
+    "High",
+};
+
 constexpr std::array kTouchTargetingLabels = {
     "Hybrid",
     "Hold",
@@ -1215,6 +1222,40 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 .helpText = "Lowers the in-headset render resolution (down to 60%) while the game is "
                             "missing frames, and raises it back when there's headroom. Turn off if the "
                             "picture gets blurry without motion getting smoother (CPU-bound areas). On by default."
+            });
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Foveated Rendering",
+                .getValue =
+                    [] {
+                        return kVrFoveationLabels[std::clamp(
+                            getSettings().game.vrFoveation.getValue(), 0, 3)];
+                    },
+                .isDisabled = [] { return !getSettings().game.vrSinglePassStereo.getValue(); },
+                .isModified =
+                    [] {
+                        return getSettings().game.vrFoveation.getValue() !=
+                               getSettings().game.vrFoveation.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                for (int i = 0; i < static_cast<int>(kVrFoveationLabels.size()); i++) {
+                    pane.add_button({
+                            .text = kVrFoveationLabels[i],
+                            .isSelected =
+                                [i] { return getSettings().game.vrFoveation.getValue() == i; },
+                        })
+                        .on_pressed([i] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.vrFoveation.setValue(i);
+                            config::save();
+                        });
+                }
+                pane.add_rml(
+                    "<br/>Renders the edges of each eye, where the headset's lenses blur anyway, at "
+                    "half and then quarter resolution to free up GPU time. Higher levels shrink the "
+                    "full-resolution centre. Needs Single-Pass Stereo. Medium by default.");
             });
 #endif
 

@@ -323,6 +323,12 @@ struct UserSettings {
         // (down to 60%) while frames are being missed and raises it back with
         // headroom. Off keeps fixed full-size eyes. Default true.
         ConfigVar<bool> vrAdaptiveResolution;
+        // Fixed foveated rendering on the single-pass stereo eye pass
+        // (VK_EXT_fragment_density_map, standalone Quest): 0 Off, 1 Low,
+        // 2 Medium, 3 High -- each step shrinks the full-resolution centre of
+        // each eye; the periphery drops to 1/2 then 1/4 resolution. Inert
+        // where unsupported (PC, two-pass). Default 2.
+        ConfigVar<int> vrFoveation;
         // Application SpaceWarp (XR_FB_space_warp, standalone Quest only):
         // the app submits per-eye motion vectors + depth alongside the
         // color image and the runtime synthesizes every other frame,
