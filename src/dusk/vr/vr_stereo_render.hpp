@@ -1580,11 +1580,19 @@ inline void drawScreenModeBillboard(int eye = 0) {
     GXSetCullMode(GX_CULL_NONE);
     GXSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
     GXLoadTexObj(activeTex, GX_TEXMAP0);
+    // GalaxyQuest model: the virtual screen is FIXED in the room (app space / LOCAL space),
+    // NOT floating or tracking your head when you turn! The forward direction is fixed along
+    // the session's reference forward (0, 0, -1).
+    const float widthSetting = kScreenModeWidthMeters * std::clamp(dusk::getSettings().game.vrScreenModeWidth.getValue(), 0.5f, 2.5f);
+    const float distSetting = kScreenModeDistanceMeters * std::clamp(dusk::getSettings().game.vrScreenModeDistance.getValue(), 0.5f, 2.5f);
 
-    const float halfW = kScreenModeWidthMeters * 0.5f * kHudUnitsPerMetre;
+    const float halfW = widthSetting * 0.5f * kHudUnitsPerMetre;
     const float halfH = halfW * (9.0f / 16.0f);
+
+    // Stationary room-fixed forward vector (0, 0, -1): stays completely stationary in front of you!
+    static const cXyz s_roomFixedForward{0.0f, 0.0f, -1.0f};
     const HudQuadCorners c = computeBillboardPose(
-        g_hudSmoothedWorldForward, kScreenModeDistanceMeters * kHudUnitsPerMetre, halfW, halfH);
+        s_roomFixedForward, distSetting * kHudUnitsPerMetre, halfW, halfH);
     GXBegin(GX_QUADS, GX_VTXFMT0, 4);
     GXPosition3f32(c.x[0], c.y[0], c.z[0]); GXTexCoord2f32(0.0f, 0.0f);
     GXPosition3f32(c.x[1], c.y[1], c.z[1]); GXTexCoord2f32(1.0f, 0.0f);

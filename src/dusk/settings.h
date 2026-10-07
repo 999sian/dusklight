@@ -297,6 +297,10 @@ struct UserSettings {
         ConfigVar<bool> vrScreenModeStereo;
         // Stereoscopic 3D depth multiplier for the Giant Screen (0.2x .. 3.0x, default 1.0x).
         ConfigVar<float> vrScreenModeDepth;
+        // Distance from player to the Giant Screen (meters, 1.5 .. 10.0, default 4.5m).
+        ConfigVar<float> vrScreenModeDistance;
+        // Width of the Giant Screen (meters, 2.0 .. 12.0, default 5.3m).
+        ConfigVar<float> vrScreenModeWidth;
         // Renders both VR eyes in ONE scene pass (instanced per eye into a
         // double-wide target, see vr_render::beginStereoPass()) instead of
         // traversing and recording the whole scene twice per frame. The

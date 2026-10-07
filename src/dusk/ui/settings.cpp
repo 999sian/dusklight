@@ -958,6 +958,16 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "recede farther into the screen and Link pop out toward you.",
             20, 200, 10,
             [] { return !dusk::getSettings().game.vrScreenMode.getValue() || !dusk::getSettings().game.vrScreenModeStereo.getValue(); });
+        config_percent_select(leftPane, rightPane, getSettings().game.vrScreenModeDistance,
+            "Screen Distance",
+            "Distance to the virtual screen (meters). 100% = 4.5m default; lower is closer, higher is farther.",
+            50, 200, 10,
+            [] { return !dusk::getSettings().game.vrScreenMode.getValue(); });
+        config_percent_select(leftPane, rightPane, getSettings().game.vrScreenModeWidth,
+            "Screen Size",
+            "Virtual screen display size. 100% = 5.3m default theater width; adjust for personal comfort.",
+            50, 200, 10,
+            [] { return !dusk::getSettings().game.vrScreenMode.getValue(); });
 #if !VR_SETTINGS_STANDALONE
         // Standalone (Quest) has no desktop window to mirror to. The setting itself stays
         // registered and defaults ON there -- the mirror path also drives the Dusklight overlay's

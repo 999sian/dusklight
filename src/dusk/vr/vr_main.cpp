@@ -332,8 +332,48 @@ struct PendingFrameSubmit {
     XrPosef spaceWarpDeltaPose{{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 0.f}};
     float spaceWarpNearZ = 0.f;
     float spaceWarpFarZ = 0.f;
+    // Giant screen (game.vrScreenMode): quad layers submitted instead of the
+    // projection layer; 2 when stereo (one per eye), 0 when not in use.
+    uint32_t screenQuadCount = 0;
+    XrCompositionLayerQuad screenQuads[2] = {{XR_TYPE_COMPOSITION_LAYER_QUAD}, {XR_TYPE_COMPOSITION_LAYER_QUAD}};
 };
 PendingFrameSubmit g_pendingSubmit;
+
+// Where the giant screen is anchored in LOCAL space: the head position and
+// yaw (level, no pitch/roll) on the first screen-mode frame. Fixed in the room
+// from then on, like GalaxyQuest; re-taken when screen mode is switched back
+// on, and a Meta-button recentre moves LOCAL space itself.
+bool g_screenAnchorValid = false;
+XrPosef g_screenAnchor{{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 0.f}};
+
+XrPosef screenAnchorFromHead(const XrPosef& head) {
+    const XrQuaternionf& q = head.orientation;
+    // Head forward (-Z rotated by q), flattened to the floor plane.
+    float fx = -2.f * (q.x * q.z + q.w * q.y);
+    float fz = -(1.f - 2.f * (q.x * q.x + q.y * q.y));
+    const float len = std::sqrt(fx * fx + fz * fz);
+    if (len < 1e-4f) {
+        fx = 0.f;
+        fz = -1.f;
+    } else {
+        fx /= len;
+        fz /= len;
+    }
+    // Yaw that turns the quad's +Z (its visible side) toward the viewer.
+    const float half = 0.5f * std::atan2(-fx, -fz);
+    return XrPosef{{0.f, std::sin(half), 0.f, std::cos(half)}, head.position};
+}
+
+// The screen's centre `distance` metres in front of the anchor, at eye height.
+XrPosef screenPoseAt(const XrPosef& anchor, float distance) {
+    const XrQuaternionf& q = anchor.orientation;
+    const float s = 2.f * q.y * q.w;           // sin(yaw)
+    const float c = 1.f - 2.f * q.y * q.y;     // cos(yaw)
+    XrPosef p = anchor;
+    p.position.x -= s * distance;
+    p.position.z -= c * distance;
+    return p;
+}
 
 
 // FIXED this session: these now come from real xrCreateActionSpace calls
@@ -3095,24 +3135,64 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     }
 
     if (screenMode) {
-        const uint32_t screenHeight = std::max(720u, (g_eyeImageHeight / 2u / 9u) * 9u);
-        const uint32_t screenWidth = screenHeight * 16u / 9u;
-        const bool stereo = dusk::getSettings().game.vrScreenModeStereo.getValue();
+        // Giant screen as OpenXR quad layers (GalaxyQuest's method): the game
+        // camera renders into a 16:9 pass, that image is copied into the
+        // lower-left of the eye swapchain, and submitFrame() shows it as a
+        // quad layer fixed in the room. No eye passes are rendered at all,
+        // and the compositor samples the picture once at panel density.
+        const bool stereo = dusk::getSettings().game.vrScreenModeStereo.getValue() && viewCount == 2;
+        const uint32_t screenWidth = stereo ? 1280u : 1600u;
+        const uint32_t screenHeight = stereo ? 720u : 900u;
 
-        if (stereo) {
-            // Left eye (eye 0)
-            const aurora::gfx::ResolvedTargets leftTargets =
-                renderScreenModeGamePass(screenWidth, screenHeight, menuVisible, 0);
-            vr_render::copyScreenModeTexture(leftTargets, screenWidth, screenHeight, 0);
-            // Right eye (eye 1)
-            const aurora::gfx::ResolvedTargets rightTargets =
-                renderScreenModeGamePass(screenWidth, screenHeight, menuVisible, 1);
-            vr_render::copyScreenModeTexture(rightTargets, screenWidth, screenHeight, 1);
-        } else {
-            const aurora::gfx::ResolvedTargets screenTargets =
-                renderScreenModeGamePass(screenWidth, screenHeight, menuVisible, 0);
-            vr_render::copyScreenModeTexture(screenTargets, screenWidth, screenHeight, 0);
+        if (!g_screenAnchorValid) {
+            g_screenAnchor = screenAnchorFromHead(hmdPose);
+            g_screenAnchorValid = true;
         }
+
+        const uint32_t passCount = stereo ? 2u : 1u;
+        for (uint32_t i = 0; i < passCount; ++i) {
+            const aurora::gfx::ResolvedTargets t =
+                renderScreenModeGamePass(screenWidth, screenHeight, menuVisible, static_cast<int>(i));
+            pendingEyes[i] = PendingEyeReadback{};
+            if (!t.colorTexture) {
+                continue;
+            }
+            const uint32_t dstX = i * screenWidth;
+#if !DUSK_VR_XR_GRAPHICS_VULKAN
+            if (g_session->usesGpuDirectSwapchainCopy()) {
+#else
+            if (g_session->usesSharedImageGpuDirect()) {
+#endif
+                g_session->encodeSwapchainCopy(t.colorTexture, i, swapchainIndex, screenWidth, screenHeight, dstX,
+                                               aurora::gfx::color_format());
+            } else {
+                g_session->encodeEyeCopy(t.colorTexture, i, swapchainIndex, screenWidth, screenHeight, dstX,
+                                         aurora::gfx::color_format());
+            }
+            pendingEyes[i] = PendingEyeReadback{true, i, swapchainIndex, screenWidth, screenHeight, dstX,
+                                                g_eyeImageWidth * 2};
+        }
+
+        const float width = vr_render::kScreenModeWidthMeters *
+                            std::clamp(dusk::getSettings().game.vrScreenModeWidth.getValue(), 0.5f, 2.5f);
+        const float dist = vr_render::kScreenModeDistanceMeters *
+                           std::clamp(dusk::getSettings().game.vrScreenModeDistance.getValue(), 0.5f, 2.5f);
+        g_pendingSubmit.screenQuadCount = passCount;
+        for (uint32_t i = 0; i < passCount; ++i) {
+            XrCompositionLayerQuad& q = g_pendingSubmit.screenQuads[i];
+            q = XrCompositionLayerQuad{XR_TYPE_COMPOSITION_LAYER_QUAD};
+            q.space = base;
+            q.eyeVisibility = !stereo ? XR_EYE_VISIBILITY_BOTH : (i == 0 ? XR_EYE_VISIBILITY_LEFT : XR_EYE_VISIBILITY_RIGHT);
+            q.subImage.swapchain = g_session->swapchain();
+            q.subImage.imageArrayIndex = 0;
+            q.subImage.imageRect.offset = {static_cast<int32_t>(i * screenWidth), 0};
+            q.subImage.imageRect.extent = {static_cast<int32_t>(screenWidth), static_cast<int32_t>(screenHeight)};
+            q.pose = screenPoseAt(g_screenAnchor, dist);
+            q.size = {width, width * 9.0f / 16.0f};
+        }
+    } else {
+        g_screenAnchorValid = false;
+        g_pendingSubmit.screenQuadCount = 0;
     }
     // Desktop mirror: captured from eye 0 (left) inside the loop below,
     // applied once after it. See aurora::gfx::set_present_source_mirror()'s
@@ -3128,7 +3208,9 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     // CPU-side positions (aim dot, HUD/menu billboards) are computed
     // against the head-center view and get their disparity from the
     // shader's per-eye correction.
-    if (!screenMode && dusk::getSettings().game.vrSinglePassStereo && viewCount == 2) {
+    if (screenMode) {
+        // Nothing to render per eye: the screen goes out as quad layers.
+    } else if (dusk::getSettings().game.vrSinglePassStereo && viewCount == 2) {
         const uint32_t eyeWidth = g_eyeImageWidth;
         const uint32_t eyeHeight = g_eyeImageHeight;
         vr_render::StereoParams stereoParams{
@@ -3630,13 +3712,20 @@ void submitFrame() {
     projLayer.viewCount = g_pendingSubmit.viewCount;
     projLayer.views = g_pendingSubmit.projViews.data();
 
-    const XrCompositionLayerBaseHeader* layers[] = {
-        reinterpret_cast<const XrCompositionLayerBaseHeader*>(&projLayer)};
+    const XrCompositionLayerBaseHeader* layers[2] = {
+        reinterpret_cast<const XrCompositionLayerBaseHeader*>(&projLayer), nullptr};
+    uint32_t layerCount = 1;
+    if (g_pendingSubmit.screenQuadCount > 0) {
+        layerCount = g_pendingSubmit.screenQuadCount;
+        for (uint32_t i = 0; i < layerCount; ++i) {
+            layers[i] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&g_pendingSubmit.screenQuads[i]);
+        }
+    }
 
     XrFrameEndInfo endInfo{XR_TYPE_FRAME_END_INFO};
     endInfo.displayTime = g_pendingSubmit.frameState.predictedDisplayTime;
     endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
-    endInfo.layerCount = 1;
+    endInfo.layerCount = layerCount;
     endInfo.layers = layers;
 
     if (XR_FAILED(xrEndFrame(g_session->session(), &endInfo))) {

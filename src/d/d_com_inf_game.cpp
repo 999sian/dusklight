@@ -6662,14 +6662,16 @@ void dComIfGd_setListCursor() {
 
 void dComIfGd_drawXluListInvisible() {
     ZoneScoped;
-    if (!dusk::getSettings().game.disableWaterRefraction && !dusk::vr::isImmersiveVr()) {
+    // Any headset rendering, giant screen included: the refraction capture
+    // breaks inside TPVR's protected offscreen passes.
+    if (!dusk::getSettings().game.disableWaterRefraction && !dusk::vr::isRenderingToHeadset()) {
         g_dComIfG_gameInfo.drawlist.drawXluListInvisible();
     }
 }
 
 void dComIfGd_drawOpaListInvisible() {
     ZoneScoped;
-    if (!dusk::getSettings().game.disableWaterRefraction && !dusk::vr::isImmersiveVr()) {
+    if (!dusk::getSettings().game.disableWaterRefraction && !dusk::vr::isRenderingToHeadset()) {
         g_dComIfG_gameInfo.drawlist.drawOpaListInvisible();
     }
 }
