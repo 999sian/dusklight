@@ -88,7 +88,7 @@ extern "C" uint32_t g_duskVRCurrentEyeIndex = 0;
 // actual open eye pass -- g_duskVRRenderingToHeadset can't distinguish those
 // two cases, only this can.
 extern "C" bool g_duskVREyePassOpen = false;
-static bool g_duskVRScreenModePassOpen = false;
+extern "C" bool g_duskVRScreenModePassOpen = false;
 
 // Per-eye image size actually rendered/submitted this session: the runtime's
 // recommended size scaled by game.vrRenderScale (see startup()). Every
@@ -2311,6 +2311,7 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     // to the jump-cut block. C-stick orbit input never reaches the game
     // camera in VR (dCamera_c::updatePad()), so every delta here is the
     // camera's own follow/scripted movement, not the player's stick.
+    if (!screenMode) {
     {
         static bool s_followWasActive = false;
         static s16 s_followLastCamYawS = 0;
@@ -2636,6 +2637,7 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
             }
         }
     }
+    }
 
     // See g_headMoveAngleS's declaration comment for the bug this fixes.
     // Computed here (once per frame, not per eye) rather than lazily in
@@ -2737,6 +2739,7 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     // per-eye call site (d_a_alink.cpp, inside daAlink_c::draw()) was
     // proven, via a full-session [dusk::vr::eyepasscheck] log capture, to
     // never actually run during a real VR eye pass -- this call site does.
+    if (!screenMode) {
     if (auto* link = static_cast<daAlink_c*>(dComIfGp_getLinkPlayer())) {
         dusk::vr::refreshTrackedHandDrawMtxLive(link->getHandModel());
     }
@@ -2784,6 +2787,7 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     // deliberately not touched this round -- see
     // refreshTrackedHookshotMtxLive()'s own comment).
     dusk::vr::refreshTrackedHookshotMtxLive();
+    }
     perfLap(3);
 
     // World-space point both eyes anchor their view matrix to this frame --

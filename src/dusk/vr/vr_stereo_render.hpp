@@ -1485,6 +1485,34 @@ inline void ensureAndCopyMenuBillboardTexture() {
     aurora::gfx::push_encoder_task(menu_billboard_detail::s_copyTaskId, nullptr, 0);
 }
 
+namespace screen_mode_detail {
+inline wgpu::Texture s_pendingCopySrc;
+inline wgpu::Texture s_pendingCopyDst;
+inline uint32_t s_pendingCopyWidth = 0;
+inline uint32_t s_pendingCopyHeight = 0;
+inline aurora::gfx::EncoderTaskId s_copyTaskId = aurora::gfx::InvalidEncoderTask;
+
+inline void copyEncoderTaskCallback(const aurora::gfx::EncoderTaskContext& /*ctx*/,
+                                     const wgpu::CommandEncoder& cmd, const void* /*payload*/,
+                                     size_t /*payloadSize*/, void* /*userdata*/) {
+    if (!s_pendingCopySrc || !s_pendingCopyDst) {
+        return;
+    }
+    wgpu::CommandEncoder mutableCmd = cmd;
+
+    wgpu::TexelCopyTextureInfo srcCopy{};
+    srcCopy.texture = s_pendingCopySrc;
+    srcCopy.aspect = wgpu::TextureAspect::All;
+
+    wgpu::TexelCopyTextureInfo dstCopy{};
+    dstCopy.texture = s_pendingCopyDst;
+    dstCopy.aspect = wgpu::TextureAspect::All;
+
+    wgpu::Extent3D extent{s_pendingCopyWidth, s_pendingCopyHeight, 1};
+    mutableCmd.CopyTextureToTexture(&srcCopy, &dstCopy, &extent);
+}
+} // namespace screen_mode_detail
+
 inline bool copyScreenModeTexture(const aurora::gfx::ResolvedTargets& targets, uint32_t width,
                                   uint32_t height) {
     if (!targets.colorTexture || width == 0 || height == 0) {
@@ -1505,19 +1533,20 @@ inline bool copyScreenModeTexture(const aurora::gfx::ResolvedTargets& targets, u
         g_screenModeTexHeight = height;
     }
 
-    menu_billboard_detail::s_pendingCopySrc = targets.colorTexture;
-    menu_billboard_detail::s_pendingCopyDst = g_screenModeCopyTexture;
-    menu_billboard_detail::s_pendingCopyWidth = width;
-    menu_billboard_detail::s_pendingCopyHeight = height;
-    if (menu_billboard_detail::s_copyTaskId == aurora::gfx::InvalidEncoderTask) {
+
+    screen_mode_detail::s_pendingCopySrc = targets.colorTexture;
+    screen_mode_detail::s_pendingCopyDst = g_screenModeCopyTexture;
+    screen_mode_detail::s_pendingCopyWidth = width;
+    screen_mode_detail::s_pendingCopyHeight = height;
+    if (screen_mode_detail::s_copyTaskId == aurora::gfx::InvalidEncoderTask) {
         aurora::gfx::EncoderTaskDescriptor desc{
             .label = "vr_screen_mode_copy",
-            .callback = &menu_billboard_detail::copyEncoderTaskCallback,
+            .callback = &screen_mode_detail::copyEncoderTaskCallback,
             .userdata = nullptr,
         };
-        menu_billboard_detail::s_copyTaskId = aurora::gfx::register_encoder_task_type(desc);
+        screen_mode_detail::s_copyTaskId = aurora::gfx::register_encoder_task_type(desc);
     }
-    aurora::gfx::push_encoder_task(menu_billboard_detail::s_copyTaskId, nullptr, 0);
+    aurora::gfx::push_encoder_task(screen_mode_detail::s_copyTaskId, nullptr, 0);
     return true;
 }
 
