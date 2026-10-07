@@ -304,6 +304,10 @@ bool g_renderedToHeadsetThisFrame = false;
 // meaningful when g_hasPendingFrameSubmit is true; tick() sets both, and
 // submitFrame() clears the flag once it's consumed them.
 bool g_hasPendingFrameSubmit = false;
+// Vulkan: set by submitFrame() once it has queued completeFrame() on aurora's
+// render worker; the next tick() waits for it before touching anything it
+// uses (see completeFrame()'s comment).
+bool g_frameQueued = false;
 struct PendingEyeReadback {
     // NEW this session (VR_MOD_HANDOFF_10 follow-up, option (c)): false
     // when endEye() returned an empty ResolvedTargets (foreign pass
@@ -354,6 +358,9 @@ struct PendingFrameSubmit {
     uint32_t uiQuadCount = 0;
     PendingEyeReadback uiCopies[2]{};
     XrCompositionLayerQuad uiQuads[2]{{XR_TYPE_COMPOSITION_LAYER_QUAD}, {XR_TYPE_COMPOSITION_LAYER_QUAD}};
+    // vrSuperResolution, sampled on the main thread by submitFrame() since
+    // completeFrame() may run on the render worker.
+    bool layerFilters = false;
 };
 PendingFrameSubmit g_pendingSubmit;
 
@@ -941,9 +948,10 @@ bool startup() {
         // 2. XR_KHR_android_thread_settings: tell the runtime which of our
         //    threads are the hot ones so it keeps them on the big cores.
         //    This thread (the one running startup()/tick(), i.e. the game's
-        //    main loop calling xrWaitFrame/xrBeginFrame/xrEndFrame) is
+        //    main loop calling xrWaitFrame/xrBeginFrame) is
         //    APPLICATION_MAIN; aurora's render worker (the thread that
-        //    actually submits to the Vulkan queue) is RENDERER_MAIN; the GX
+        //    actually submits to the Vulkan queue, and on Vulkan also runs
+        //    completeFrame()'s xrEndFrame) is RENDERER_MAIN; the GX
         //    FIFO processor (records the GX stream into Dawn commands that
         //    feed the render worker) is RENDERER_WORKER. Thread ids come
         //    from aurora::thread::native_thread_id_for(), a small registry
@@ -1343,8 +1351,16 @@ struct TickReentrancyGuard {
 //   renderEnc   = both eyes' scene traversal + GX/Dawn command recording
 //   gapToSubmit = tick() return -> submitFrame() entry (m_Do_main.cpp's
 //                 aurora_end_frame() + anything else it runs in between)
-//   sync        = aurora::gfx::synchronize() (waits for the render worker)
-//   submit      = rest of submitFrame() (GPU copy handoff, xrEndFrame)
+//   sync        = main thread blocked on the render worker for this frame
+//                 (aurora::gfx::synchronize()). Vulkan: at the NEXT tick()'s
+//                 entry, i.e. only the part of the worker's encode/submit/
+//                 completeFrame() that ovl didn't hide; D3D12: in submitFrame()
+//   ovl         = Vulkan: main-thread time from submitFrame() queuing this
+//                 frame to that wait (the next frame's events/begin/sim) --
+//                 what ran in parallel with the worker
+//   submit      = completeFrame(): swapchain copy hand-off, image releases,
+//                 xrEndFrame (on the render worker on Vulkan)
+//   total       = tick() entry -> xrEndFrame returned
 // Also carries this frame's sim-tick count (a frame that runs 2 sim ticks is
 // doing double game logic) and the VR cull counters from J3DUClipper.cpp.
 extern "C" unsigned int g_duskVRCullTested;
@@ -1355,6 +1371,10 @@ PerfClock::time_point g_perfTickStart;
 PerfClock::time_point g_perfAfterAcquire;
 PerfClock::time_point g_perfTickEnd;
 int g_perfNumSimTicks = 0;
+// submitFrame() entry, its hand-off to the worker, and xrEndFrame's return
+// (written by completeFrame(), read after the wait); sync/submit in ms.
+PerfClock::time_point g_perfSubmitStart, g_perfQueued, g_perfFrameEnd;
+double g_perfSyncMs = 0, g_perfSubmitMs = 0;
 // Sub-phases (ms): setup split + pre-eye-loop HUD/minimap capture + per-eye
 // traversal/painter/endEye (summed across both eyes).
 double g_perfWaitFrameMs = 0, g_perfSwapWaitMs = 0, g_perfPreLoopMs = 0;
@@ -1793,7 +1813,60 @@ static void encodeScreenUiLayers(const XrCompositionLayerQuad& screen, bool menu
     aurora::rmlui::set_force_no_backdrop(true);
 }
 
+// Main thread: blocks until the render worker has run everything queued so far.
+static double syncRenderWorkerMs() {
+    const PerfClock::time_point start = PerfClock::now();
+    aurora::gfx::synchronize();
+    return perfMs(start, PerfClock::now());
+}
+
+// TEMP DIAGNOSTIC -- see the comment block above tick(). Logs the frame
+// completeFrame() last finished, on a dip plus a periodic baseline. Main
+// thread only: cull counters are read+reset here too.
+static void logFramePerf(double ovlMs) {
+    const double setupMs = perfMs(g_perfTickStart, g_perfAfterAcquire);
+    const double renderEncMs = perfMs(g_perfAfterAcquire, g_perfTickEnd);
+    const double gapMs = perfMs(g_perfTickEnd, g_perfSubmitStart);
+    const double totalMs = perfMs(g_perfTickStart, g_perfFrameEnd);
+    const unsigned int cullTested = g_duskVRCullTested;
+    const unsigned int cullRejected = g_duskVRCullRejected;
+    g_duskVRCullTested = 0;
+    g_duskVRCullRejected = 0;
+    static int s_perfFrame = 0;
+    ++s_perfFrame;
+    const bool dip = totalMs > kPerfDipThresholdMs;
+    if (dip || (s_perfFrame % kPerfBaselineInterval) == 0) {
+        const aurora::gfx::WorkerFrameStats ws = aurora::gfx::worker_frame_stats();
+        char msg[520];
+        duskVrSnprintf(msg, sizeof(msg),
+            "[dusk::vr::perf] %s total=%.1f setup=%.1f(waitFrame=%.1f swapWait=%.1f "
+            "beginFrame=%.1f syncActions=%.1f hmd=%.1f ctrl=%.1f mid=%.1f/%.1f/%.1f) "
+            "renderEnc=%.1f(preLoop=%.1f begin=%.1f iter=%.1f painter=%.1f end=%.1f) "
+            "gap=%.1f sync=%.1f ovl=%.1f submit=%.1f sim=%d cull=%u/%u eye=%ux%u(%u%%) ffr=%d "
+            "worker(enc=%.1f finish=%.1f submit=%.1f wall=%.1f draws=%u merged=%u passes=%u maxPassDraws=%u)\n",
+            dip ? "DIP" : "base", totalMs, setupMs, g_perfWaitFrameMs, g_perfSwapWaitMs,
+            g_perfMid[5], g_perfMid[1], g_perfMid[6], g_perfMid[0], g_perfMid[2], g_perfMid[3], g_perfMid[4],
+            renderEncMs, g_perfPreLoopMs, g_perfEyeBeginMs, g_perfEyeIterMs, g_perfEyePainterMs,
+            g_perfEyeEndMs, gapMs, g_perfSyncMs, ovlMs, g_perfSubmitMs, g_perfNumSimTicks, cullRejected, cullTested,
+            g_perfEyeWidth, g_perfEyeHeight, (g_perfEyeWidth * 100 + g_eyeImageWidth / 2) / g_eyeImageWidth,
+            g_perfFoveation,
+            ws.encodeMs, ws.finishMs, ws.submitMs, ws.wallMs, ws.drawCalls, ws.mergedDrawCalls, ws.renderPasses, ws.maxPassDraws);
+        duskVrLog(msg);
+    }
+}
+
 void tick(const dusk::game_clock::FrameTiming& pacing) {
+    // Vulkan: the previous frame's completeFrame() may still be running on
+    // the render worker, and owns the XR frame/swapchain calls, both
+    // Sessions' frame state and g_pendingSubmit until it returns (see its
+    // comment). Wait before any of that is touched -- and before the g_perf*
+    // resets below, since this logs that frame's perf line.
+    if (g_frameQueued) {
+        g_frameQueued = false;
+        const double ovlMs = perfMs(g_perfQueued, PerfClock::now());
+        g_perfSyncMs = syncRenderWorkerMs();
+        logFramePerf(ovlMs);
+    }
     g_perfTickStart = PerfClock::now();
     g_perfAfterAcquire = g_perfTickStart;
     g_perfTickEnd = g_perfTickStart;
@@ -3926,48 +3999,33 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     g_perfTickEnd = PerfClock::now();
 }
 
-// NEW this session: the other half of what used to be tick()'s tail end,
-// split out because of a confirmed ordering bug (see
-// vr_xr_submit.hpp's Session::encodeEyeCopy/readbackEyeCopy comment for the
-// root cause). tick() is called from INSIDE m_Do_main.cpp's
-// aurora_begin_frame()/aurora_end_frame() pair and returns well before
-// aurora_end_frame() runs -- so anything that depends on this frame's Dawn
-// copy having actually been submitted to the GPU (readbackEyeCopy) can't
-// happen inside tick() itself. Call this once, right after
-// m_Do_main.cpp's aurora_end_frame() -- NOT inside the begin/end pair.
+// The XR hand-off for the frame tick() recorded: copy it into the XR
+// swapchain image, release that image, xrEndFrame. Split out of tick()
+// because it needs the frame's Dawn work SUBMITTED, and aurora_end_frame()
+// only enqueues that onto aurora's render worker (see vr_xr_submit.hpp's
+// Session::encodeEyeCopy/readbackEyeCopy comment: reading the copy before
+// the worker had submitted it was a real crash/race).
 //
-// Safe to call unconditionally every frame: if tick() didn't actually
-// render stereo eyes this frame (no session, shouldRender==false, no ready
-// gameplay view -- all of which already called their own complete
-// xrEndFrame with an empty layer list and returned early), g_hasPendingFrameSubmit
-// stays false and this is a no-op.
-void submitFrame() {
-    if (!g_hasPendingFrameSubmit) {
-        return;
-    }
-    g_hasPendingFrameSubmit = false;
-    const PerfClock::time_point perfSubmitStart = PerfClock::now();
-
-    // ROOT-CAUSED this session: aurora_end_frame() only ENQUEUES this
-    // frame's work onto Aurora's render worker thread (render_worker::
-    // enqueue_end_frame in common.cpp) and returns immediately -- it does
-    // NOT wait for that thread to actually run it. The per-eye encoder
-    // task pushed in tick() (Session::encodeEyeCopy, via push_encoder_task)
-    // is likewise just queued when called and replayed later on that same
-    // worker thread (common.cpp's enqueue_pass/execute_encoder_task), which
-    // is where the actual CopyTextureToBuffer into each eye's
-    // cpuCopyBuffers_[eyeIndex] happens. Without waiting for that, this
-    // loop's MapAsync below could run concurrently with the worker thread
-    // still recording/submitting that same CopyTextureToBuffer against the
-    // identical wgpu::Buffer -- a genuine cross-thread race, not just the
-    // eyeIndex/swapchainIndex aliasing fixed earlier -- which is exactly
-    // what "WebGPU error 2: Concurrent buffer operations are not allowed"
-    // on MapAsync reported. aurora::gfx::synchronize() (gfx.hpp) blocks
-    // until the render worker has fully drained its queue, so by the time
-    // it returns here, this frame's copy is guaranteed to have actually
-    // executed and been submitted -- safe to MapAsync after that.
-    aurora::gfx::synchronize();
-    const PerfClock::time_point perfAfterSync = PerfClock::now();
+// Vulkan: submitFrame() queues this on the render worker right behind the
+// frame's EndFrame item, so it runs as soon as that Queue::Submit is done,
+// while the main thread is already on the next frame (events, begin_frame,
+// game sim). The main thread waits for it at the next tick()'s entry and
+// until then must leave alone:
+//  - the XR frame/swapchain calls: xrBeginFrame must not precede this
+//    xrEndFrame (that discards this frame), and OpenXR's Vulkan binding
+//    needs xrBeginFrame/xrEndFrame/xrAcquire/ReleaseSwapchainImage
+//    externally synchronized with our own submits to the XR queue;
+//  - g_pendingSubmit and both Sessions' per-frame state (shared-image slot
+//    and size set, space warp, CPU copy buffers);
+//  - the side tables the VR encoder tasks read while the worker encodes
+//    this frame (Session::pendingCopySrc_, the menu billboard copy, space
+//    warp uniforms).
+// All of those are only written in tick(), after that wait. Main-thread
+// state (settings, interp replay stats, cull counters, the perf line) stays
+// in submitFrame()/tick(). D3D12 (PC): unchanged, runs inline in
+// submitFrame() after aurora::gfx::synchronize().
+static void completeFrame() {
+    const PerfClock::time_point start = PerfClock::now();
 
     for (const auto& eye : g_pendingSubmit.eyes) {
         // NEW this session (VR_MOD_HANDOFF_10 follow-up, option (c)): skip
@@ -4063,7 +4121,7 @@ void submitFrame() {
     XrSwapchainImageReleaseInfo releaseInfo{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
     // TEMP DIAGNOSTIC (this session): see tick()'s matching comment above.
     if (XR_FAILED(xrReleaseSwapchainImage(g_session->swapchain(), &releaseInfo))) {
-        duskVrLog("[dusk::vr::submitFrame] FAILED: xrReleaseSwapchainImage\n");
+        duskVrLog("[dusk::vr::completeFrame] FAILED: xrReleaseSwapchainImage\n");
     }
 
 #if DUSK_VR_XR_GRAPHICS_VULKAN
@@ -4095,7 +4153,7 @@ void submitFrame() {
     sceneFilter.layerFlags = XR_COMPOSITION_LAYER_SETTINGS_NORMAL_SHARPENING_BIT_FB;
     XrCompositionLayerSettingsFB uiFilter{XR_TYPE_COMPOSITION_LAYER_SETTINGS_FB};
     uiFilter.layerFlags = XR_COMPOSITION_LAYER_SETTINGS_QUALITY_SUPER_SAMPLING_BIT_FB;
-    const bool filters = g_hasLayerSettings && dusk::getSettings().game.vrSuperResolution.getValue();
+    const bool filters = g_pendingSubmit.layerFilters;
     projLayer.next = filters ? &sceneFilter : nullptr;
 
     const XrCompositionLayerBaseHeader* layers[4]{};
@@ -4123,49 +4181,39 @@ void submitFrame() {
     endInfo.layers = layers;
 
     if (XR_FAILED(xrEndFrame(g_session->session(), &endInfo))) {
-        duskVrLog("[dusk::vr::submitFrame] FAILED: xrEndFrame\n");
+        duskVrLog("[dusk::vr::completeFrame] FAILED: xrEndFrame\n");
     }
+    g_perfFrameEnd = PerfClock::now();
+    g_perfSubmitMs = perfMs(start, g_perfFrameEnd);
+}
 
+// Call once per frame, right after m_Do_main.cpp's aurora_end_frame() -- NOT
+// inside the begin/end pair tick() runs in. Hands the frame tick() recorded to
+// completeFrame(). Safe to call unconditionally every frame: if tick() didn't
+// render stereo eyes this frame (no session, shouldRender==false, no ready
+// gameplay view -- all of which already ended their XR frame with an empty
+// layer list), g_hasPendingFrameSubmit stays false and this is a no-op.
+void submitFrame() {
+    if (!g_hasPendingFrameSubmit) {
+        return;
+    }
+    g_hasPendingFrameSubmit = false;
+    g_perfSubmitStart = PerfClock::now();
+    g_pendingSubmit.layerFilters = g_hasLayerSettings && dusk::getSettings().game.vrSuperResolution.getValue();
     // Model-replay stats accumulate every frame; nothing logs them anymore,
     // so just reset them to keep the counters from growing all session.
     (void)dusk::interp::material::take_replay_stats();
-
-    // TEMP DIAGNOSTIC -- see the comment block above tick(). Log on a dip,
-    // plus a periodic baseline. Cull counters are read+reset here too.
-    {
-        const PerfClock::time_point perfEnd = PerfClock::now();
-        const double setupMs = perfMs(g_perfTickStart, g_perfAfterAcquire);
-        const double renderEncMs = perfMs(g_perfAfterAcquire, g_perfTickEnd);
-        const double gapMs = perfMs(g_perfTickEnd, perfSubmitStart);
-        const double syncMs = perfMs(perfSubmitStart, perfAfterSync);
-        const double submitMs = perfMs(perfAfterSync, perfEnd);
-        const double totalMs = perfMs(g_perfTickStart, perfEnd);
-        const unsigned int cullTested = g_duskVRCullTested;
-        const unsigned int cullRejected = g_duskVRCullRejected;
-        g_duskVRCullTested = 0;
-        g_duskVRCullRejected = 0;
-        static int s_perfFrame = 0;
-        ++s_perfFrame;
-        const bool dip = totalMs > kPerfDipThresholdMs;
-        if (dip || (s_perfFrame % kPerfBaselineInterval) == 0) {
-            const aurora::gfx::WorkerFrameStats ws = aurora::gfx::worker_frame_stats();
-            char msg[500];
-            duskVrSnprintf(msg, sizeof(msg),
-                "[dusk::vr::perf] %s total=%.1f setup=%.1f(waitFrame=%.1f swapWait=%.1f "
-                "beginFrame=%.1f syncActions=%.1f hmd=%.1f ctrl=%.1f mid=%.1f/%.1f/%.1f) "
-                "renderEnc=%.1f(preLoop=%.1f begin=%.1f iter=%.1f painter=%.1f end=%.1f) "
-                "gap=%.1f sync=%.1f submit=%.1f sim=%d cull=%u/%u eye=%ux%u(%u%%) ffr=%d "
-                "worker(enc=%.1f finish=%.1f submit=%.1f wall=%.1f draws=%u merged=%u passes=%u maxPassDraws=%u)\n",
-                dip ? "DIP" : "base", totalMs, setupMs, g_perfWaitFrameMs, g_perfSwapWaitMs,
-                g_perfMid[5], g_perfMid[1], g_perfMid[6], g_perfMid[0], g_perfMid[2], g_perfMid[3], g_perfMid[4],
-                renderEncMs, g_perfPreLoopMs, g_perfEyeBeginMs, g_perfEyeIterMs, g_perfEyePainterMs,
-                g_perfEyeEndMs, gapMs, syncMs, submitMs, g_perfNumSimTicks, cullRejected, cullTested,
-                g_perfEyeWidth, g_perfEyeHeight, (g_perfEyeWidth * 100 + g_eyeImageWidth / 2) / g_eyeImageWidth,
-                g_perfFoveation,
-                ws.encodeMs, ws.finishMs, ws.submitMs, ws.wallMs, ws.drawCalls, ws.mergedDrawCalls, ws.renderPasses, ws.maxPassDraws);
-            duskVrLog(msg);
-        }
-    }
+#if DUSK_VR_XR_GRAPHICS_VULKAN
+    // FIFO behind this frame's EndFrame item, i.e. right after its submit.
+    aurora::gfx::enqueue_on_render_worker(completeFrame);
+    g_frameQueued = true;
+    g_perfQueued = PerfClock::now();
+#else
+    // D3D12 (PC): blocking hand-off on the main thread, as before.
+    g_perfSyncMs = syncRenderWorkerMs();
+    completeFrame();
+    logFramePerf(0.0);
+#endif
 }
 
 }  // namespace dusk::vr

@@ -510,13 +510,14 @@ void tick(const dusk::game_clock::FrameTiming& pacing);
 
 // Call once per frame, right after the caller's own aurora_end_frame() --
 // NOT inside the aurora_begin_frame()/aurora_end_frame() pair tick() runs
-// in. Finishes what tick() started: reads back each eye's copied pixels,
-// uploads them into the XR swapchain image, releases the swapchain image,
-// and calls xrEndFrame(). Required because tick() returns before
-// aurora_end_frame() actually submits the frame's GPU work, so the copy
-// tick() encodes isn't safe to read back until after that Submit() has
-// run. Safe to call unconditionally every frame -- a no-op if tick()
-// didn't actually render stereo eyes this frame.
+// in. Finishes what tick() started: copies each eye into the XR swapchain
+// image, releases the swapchain image, and calls xrEndFrame(). Required
+// because tick() returns before aurora_end_frame() actually submits the
+// frame's GPU work, so that copy can't run until after that Submit(). On
+// Vulkan it is queued on aurora's render worker right behind the Submit
+// and this returns at once; the next tick() waits for it. Safe to call
+// unconditionally every frame -- a no-op if tick() didn't actually render
+// stereo eyes this frame.
 void submitFrame();
 
 }  // namespace dusk::vr
