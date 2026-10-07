@@ -1820,8 +1820,8 @@ public:
 
     // Lazily creates one slot's exported VkImage on the XR-side device and
     // imports its memory into Dawn (memory/texture). width/height are the
-    // FULL double-wide swapchain dimensions (both eyes share one image,
-    // offset via dstXOffset in encodeSwapchainCopy()). Any failure sets
+    // FULL size of this frame's staging image (both eyes share one image,
+    // offset via dstXOffset in encodeSwapchainCopy(); see selectSharedSize()). Any failure sets
     // sharedImageCreateFailed_, after which usesSharedImageGpuDirect() reads
     // false for the rest of the session and the caller falls back to the
     // CPU-readback path for this and every later frame.
@@ -1917,13 +1917,17 @@ public:
     // branch's beginSwapchainAccessForFrame() (name reused deliberately so
     // vr_main.cpp's call site is branch-agnostic). NOT per eye -- both eyes
     // write into the same slot's texture this frame, different halves.
+    // width/height: this frame's staging size (see selectSharedSize()).
     void beginSwapchainAccessForFrame(uint32_t /*index*/, uint32_t width, uint32_t height) {
+        selectSharedSize(width, height);
         const uint32_t slotIndex = sharedNextSlot_;
-        sharedWidth_ = width;
-        sharedHeight_ = height;
-        ensureSharedImageResources(slotIndex, width, height);
+        // All slots of a new size in one frame: one creation hitch, not one per
+        // slot (two missed refreshes in a row would lower the adaptive tier again).
+        for (uint32_t i = 0; i < kSharedSlotCount; ++i) {
+            ensureSharedImageResources(i, width, height);
+        }
         SharedImageSlot& s = sharedSlots_[slotIndex];
-        if (!s.texture) {
+        if (!s.texture || sharedImageCreateFailed_) {
             return; // failed -- sharedImageCreateFailed_ set, caller falls back to the CPU path
         }
 
@@ -1958,6 +1962,41 @@ public:
         s.memory.BeginAccess(s.texture, &beginDesc);
         sharedFrameSlot_ = slotIndex;
         sharedFrameSlotValid_ = true;
+    }
+
+    // The staging image is sized per frame: immersive eyes render at the
+    // adaptive tier's size (vr_main.cpp's tick()), screen mode at the full
+    // size. Each size's slots are created on first use and parked while
+    // another size is current, so a tier change swaps sets instead of
+    // recreating images. Parked slots keep their fences, waited on as usual
+    // when their size comes back. At most one set per tier.
+    struct SharedSizeSet {
+        uint32_t width = 0;
+        uint32_t height = 0;
+        SharedImageSlot slots[kSharedSlotCount];
+    };
+
+    void selectSharedSize(uint32_t width, uint32_t height) {
+        if (width == sharedWidth_ && height == sharedHeight_) {
+            return;
+        }
+        SharedSizeSet next{width, height};
+        for (auto it = sharedParkedSets_.begin(); it != sharedParkedSets_.end(); ++it) {
+            if (it->width == width && it->height == height) {
+                next = std::move(*it);
+                sharedParkedSets_.erase(it);
+                break;
+            }
+        }
+        if (sharedWidth_ != 0) {
+            SharedSizeSet& parked = sharedParkedSets_.emplace_back();
+            parked.width = sharedWidth_;
+            parked.height = sharedHeight_;
+            std::swap(parked.slots, sharedSlots_);
+        }
+        std::swap(sharedSlots_, next.slots);
+        sharedWidth_ = width;
+        sharedHeight_ = height;
     }
 
     // The GPU-direct equivalent of encodeEyeCopy() for this branch -- call
@@ -4311,8 +4350,9 @@ private:
     uint32_t sharedNextSlot_ = 0;
     uint32_t sharedFrameSlot_ = 0;
     bool sharedFrameSlotValid_ = false;
-    uint32_t sharedWidth_ = 0;  // full double-wide size the shared images were created with
+    uint32_t sharedWidth_ = 0;  // size of sharedSlots_' images (this frame's staging size)
     uint32_t sharedHeight_ = 0;
+    std::vector<SharedSizeSet> sharedParkedSets_;  // other sizes' slots, see selectSharedSize()
     bool sharedImageCreateFailed_ = false;
     VkCommandPool sharedCopyCmdPool_ = VK_NULL_HANDLE;
 

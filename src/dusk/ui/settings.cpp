@@ -1209,6 +1209,13 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                             "hardware edge-adaptive sharpening to the headset display. Makes distant scenery "
                             "and textures significantly crisper. On by default."
             });
+        config_bool_select(leftPane, rightPane, getSettings().game.vrAdaptiveResolution,
+            {
+                .key = "Adaptive Resolution",
+                .helpText = "Lowers the in-headset render resolution (down to 60%) while the game is "
+                            "missing frames, and raises it back when there's headroom. Turn off if the "
+                            "picture gets blurry without motion getting smoother (CPU-bound areas). On by default."
+            });
 #endif
 
 #if !VR_SETTINGS_STANDALONE

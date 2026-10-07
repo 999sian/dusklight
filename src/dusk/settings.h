@@ -319,6 +319,10 @@ struct UserSettings {
         // to the eye layer, making distant textures and geometry look significantly
         // crisper. Default true on standalone.
         ConfigVar<bool> vrSuperResolution;
+        // Adaptive per-eye resolution in immersive VR: lowers the eye render size
+        // (down to 60%) while frames are being missed and raises it back with
+        // headroom. Off keeps fixed full-size eyes. Default true.
+        ConfigVar<bool> vrAdaptiveResolution;
         // Application SpaceWarp (XR_FB_space_warp, standalone Quest only):
         // the app submits per-eye motion vectors + depth alongside the
         // color image and the runtime synthesizes every other frame,

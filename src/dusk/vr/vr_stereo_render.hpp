@@ -309,7 +309,7 @@ inline void eyeFovToProjMtx(Mtx44 dest, const XrFovf& fov, float nearZ, float fa
 struct EyeParams {
     XrPosef   pose;         // from XrView.pose
     XrFovf    fov;          // from XrView.fov
-    uint32_t  width;        // from XrViewConfigurationView.recommendedImageRectWidth
+    uint32_t  width;        // this frame's per-eye render size (adaptive, <= the swapchain's eye size)
     uint32_t  height;
     // Head-center pose (from g_viewSpace, same XR tracking space as pose)
     // for this frame -- see eyePoseToViewMtx's comment on why the camera is
@@ -691,7 +691,7 @@ inline aurora::gfx::ResolvedTargets endScreenModePass() {
 struct StereoParams {
     std::array<XrPosef, 2> eyePose;   // XrView.pose, left then right
     std::array<XrFovf, 2>  eyeFov;    // XrView.fov
-    uint32_t eyeWidth;                // one eye's recommended image size
+    uint32_t eyeWidth;                // one eye's render size this frame (adaptive)
     uint32_t eyeHeight;
     XrPosef  hmdPose;                 // head-center (VIEW space) pose, same tracking space
     cXyz     eyeAnchor;               // see EyeParams::eyeAnchor

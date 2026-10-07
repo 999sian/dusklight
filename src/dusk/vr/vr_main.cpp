@@ -317,7 +317,7 @@ struct PendingEyeReadback {
     uint32_t eyeWidth = 0;
     uint32_t eyeHeight = 0;
     uint32_t dstXOffset = 0;
-    // Width of the whole swapchain image this entry's copy is part of --
+    // Width (from x=0) of the swapchain image region this entry's copy is part of --
     // what submitFrame()'s once-per-frame whole-image copies (the D3D12
     // intermediate copy, the Vulkan shared-image blit) are sized with.
     // Two-pass: eyeWidth * 2 (one entry per eye half). Single-pass stereo:
@@ -365,6 +365,8 @@ XrPosef g_screenAnchor{{0.f, 0.f, 0.f, 1.f}, {0.f, 0.f, 0.f}};
 // screen-mode block in tick()).
 ScreenPairScheduler g_screenPairs;
 AdaptiveScreenResolution g_screenResolution;
+// Immersive per-eye render size (see the adaptive-eye block in tick()).
+AdaptiveScreenResolution g_eyeResolution;
 
 XrPosef screenAnchorFromHead(const XrPosef& head) {
     const XrQuaternionf& q = head.orientation;
@@ -1341,6 +1343,8 @@ int g_perfNumSimTicks = 0;
 // traversal/painter/endEye (summed across both eyes).
 double g_perfWaitFrameMs = 0, g_perfSwapWaitMs = 0, g_perfPreLoopMs = 0;
 double g_perfEyeIterMs = 0, g_perfEyePainterMs = 0, g_perfEyeEndMs = 0, g_perfEyeBeginMs = 0;
+// Per-eye render size this frame (adaptive eye resolution), for the perf line.
+uint32_t g_perfEyeWidth = 0, g_perfEyeHeight = 0;
 PerfClock::time_point g_perfMark;
 // Mid-section laps (ms) between xrBeginFrame and the swapchain acquire:
 // 0=locate spaces (+xrSyncActions), 1=action reads, 2=menu gamepad/swing/pad,
@@ -3092,13 +3096,49 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     g_perfSwapWaitMs = perfMs(g_perfMark, g_perfAfterAcquire);
     g_perfMark = g_perfAfterAcquire;
 
+    // Space warp needs full-size eyes, so it's decided before the staging
+    // image is opened below.
+#if DUSK_VR_XR_GRAPHICS_VULKAN
+    // PARKED 2026-09-20: the first in-headset test warped badly (the depth
+    // snapshot the MV pass reads came back all-zero -- see vr-mod-notes),
+    // and the user asked to shelve it. The whole path stays compiled and
+    // wired; flip this to true to resume testing. The settings-tab toggles
+    // were removed at the same time (the ConfigVars still exist, inert).
+    constexpr bool kSpaceWarpEnabled = false;
+    const bool spaceWarpWanted = !screenMode && kSpaceWarpEnabled &&
+                                 dusk::getSettings().game.vrSpaceWarp.getValue() &&
+                                 dusk::getSettings().game.vrSinglePassStereo.getValue() && viewCount == 2;
+#else
+    constexpr bool spaceWarpWanted = false;
+#endif
+
+    // Adaptive eye resolution (immersive): each eye renders at the controller's
+    // size, packed at the top-left of the swapchain image (left eye at x=0, right
+    // at x=eyeWidth), and the projection views sample exactly those rects -- same
+    // FOV, fewer pixels. On Vulkan the shared staging image is opened at this
+    // size (Session keeps one set per size), so single-pass still renders
+    // straight into it. Setting off, screen mode and space warp: full size.
+    const bool adaptiveEyes =
+        dusk::getSettings().game.vrAdaptiveResolution.getValue() && !screenMode && !spaceWarpWanted;
+    if (!adaptiveEyes) {
+        g_eyeResolution = AdaptiveScreenResolution{}; // full size; re-entering starts there
+    }
+    const ScreenResolution eyeSize =
+        g_eyeResolution.resolution(g_eyeImageWidth, g_eyeImageHeight, g_eyeImageWidth, g_eyeImageHeight);
+    // Multiple of 8 like startup()'s sizes, so full size is exactly g_eyeImage*.
+    const uint32_t renderEyeWidth = std::max(eyeSize.width & ~7u, 8u);
+    const uint32_t renderEyeHeight = std::max(eyeSize.height & ~7u, 8u);
+    g_perfEyeWidth = renderEyeWidth;
+    g_perfEyeHeight = renderEyeHeight;
+
     // GPU-direct swapchain copy (usesGpuDirectSwapchainCopy() -- see
     // Session::sameDeviceAsAurora_'s comment): open access to this frame's
     // swapchain image ONCE here, before either eye's own copy is encoded
     // below -- both eyes write into the same double-wide image/index this
     // frame, so BeginAccess must only be opened once, not once per eye.
-    // Full (double-wide) dimensions, matching exactly what startup()'s
+    // D3D12: full (double-wide) dimensions, matching exactly what startup()'s
     // createSwapchain(eyeWidth * 2, eyeHeight, ...) call actually allocated.
+    // Vulkan: this frame's eye size (the staging image is sized per tier).
     // beginSwapchainAccessForFrame() now has a real implementation on BOTH
     // branches (D3D12: wraps the real swapchain texture directly, see
     // sameDeviceAsAurora_'s comment; Vulkan: wraps an exported-memory
@@ -3113,7 +3153,7 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     }
 #else
     if (g_session->usesSharedImageGpuDirect()) {
-        g_session->beginSwapchainAccessForFrame(swapchainIndex, g_eyeImageWidth * 2, g_eyeImageHeight);
+        g_session->beginSwapchainAccessForFrame(swapchainIndex, renderEyeWidth * 2, renderEyeHeight);
     }
 #endif
 
@@ -3123,18 +3163,10 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     // produces the one double-wide depth snapshot the MV pass consumes.
     // Every failure inside disables it for the session with a log line.
 #if DUSK_VR_XR_GRAPHICS_VULKAN
-    // PARKED 2026-09-20: the first in-headset test warped badly (the depth
-    // snapshot the MV pass reads came back all-zero -- see vr-mod-notes),
-    // and the user asked to shelve it. The whole path stays compiled and
-    // wired; flip this to true to resume testing. The settings-tab toggles
-    // were removed at the same time (the ConfigVars still exist, inert).
-    constexpr bool kSpaceWarpEnabled = false;
     g_session->spaceWarpNewFrame();
     bool spaceWarpFrame = false;
     {
-        const bool wanted = !screenMode && kSpaceWarpEnabled &&
-                            dusk::getSettings().game.vrSpaceWarp.getValue() &&
-                            dusk::getSettings().game.vrSinglePassStereo.getValue() && viewCount == 2;
+        const bool wanted = spaceWarpWanted;
         const bool available = g_session->spaceWarpAvailable();
         static int s_loggedState = -1;
         const int state = !wanted ? 0 : (available ? 1 : 2);
@@ -3433,8 +3465,8 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     if (screenMode) {
         // Nothing to render per eye: the screen goes out as quad layers.
     } else if (dusk::getSettings().game.vrSinglePassStereo && viewCount == 2) {
-        const uint32_t eyeWidth = g_eyeImageWidth;
-        const uint32_t eyeHeight = g_eyeImageHeight;
+        const uint32_t eyeWidth = renderEyeWidth;
+        const uint32_t eyeHeight = renderEyeHeight;
         vr_render::StereoParams stereoParams{
             {views[0].pose, views[1].pose},
             {views[0].fov, views[1].fov},
@@ -3555,8 +3587,8 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         vr_render::EyeParams eyeParams{
             views[eye].pose,
             views[eye].fov,
-            g_eyeImageWidth,
-            g_eyeImageHeight,
+            renderEyeWidth,
+            renderEyeHeight,
             hmdPose.position,
             vrCameraEyeAnchor,
             renderYaw,
@@ -3731,7 +3763,7 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         projViews[eye].subImage.swapchain = g_session->swapchain();
         projViews[eye].subImage.imageArrayIndex = 0;
         // Double-wide single swapchain (decided in startup(), see its comment):
-        // eye 0 (left) occupies the left half, eye 1 (right) the right half.
+        // eye 0 (left) starts at x=0, eye 1 (right) at x=eyeParams.width (the halves at full size).
         // Relies on OpenXR's view ordering convention (view 0 = left, view 1 =
         // right for XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) -- confirmed
         // correct this session via the FOV asymmetry (each view's angleLeft/
@@ -3743,6 +3775,14 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         projViews[eye].subImage.imageRect.extent = {
             static_cast<int32_t>(eyeParams.width), static_cast<int32_t>(eyeParams.height)};
     }
+
+    // Once per immersive refresh that rendered eyes (see the adaptive-eye block).
+    bool eyesRendered = false;
+    for (const PendingEyeReadback& e : pendingEyes) {
+        eyesRendered = eyesRendered || e.valid;
+    }
+    g_eyeResolution.observe(frameState.predictedDisplayTime, frameState.predictedDisplayPeriod, g_perfWaitFrameMs,
+                            adaptiveEyes && eyesRendered);
 
     // Desktop mirror (user request 2026-08-10): show eye 0's just-rendered
     // frame on the desktop window instead of leaving it stale/blank, which
@@ -4024,12 +4064,13 @@ void submitFrame() {
                 "[dusk::vr::perf] %s total=%.1f setup=%.1f(waitFrame=%.1f swapWait=%.1f "
                 "beginFrame=%.1f syncActions=%.1f hmd=%.1f ctrl=%.1f mid=%.1f/%.1f/%.1f) "
                 "renderEnc=%.1f(preLoop=%.1f begin=%.1f iter=%.1f painter=%.1f end=%.1f) "
-                "gap=%.1f sync=%.1f submit=%.1f sim=%d cull=%u/%u "
+                "gap=%.1f sync=%.1f submit=%.1f sim=%d cull=%u/%u eye=%ux%u(%u%%) "
                 "worker(enc=%.1f finish=%.1f submit=%.1f wall=%.1f draws=%u merged=%u passes=%u maxPassDraws=%u)\n",
                 dip ? "DIP" : "base", totalMs, setupMs, g_perfWaitFrameMs, g_perfSwapWaitMs,
                 g_perfMid[5], g_perfMid[1], g_perfMid[6], g_perfMid[0], g_perfMid[2], g_perfMid[3], g_perfMid[4],
                 renderEncMs, g_perfPreLoopMs, g_perfEyeBeginMs, g_perfEyeIterMs, g_perfEyePainterMs,
                 g_perfEyeEndMs, gapMs, syncMs, submitMs, g_perfNumSimTicks, cullRejected, cullTested,
+                g_perfEyeWidth, g_perfEyeHeight, (g_perfEyeWidth * 100 + g_eyeImageWidth / 2) / g_eyeImageWidth,
                 ws.encodeMs, ws.finishMs, ws.submitMs, ws.wallMs, ws.drawCalls, ws.mergedDrawCalls, ws.renderPasses, ws.maxPassDraws);
             duskVrLog(msg);
         }

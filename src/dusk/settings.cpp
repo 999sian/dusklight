@@ -96,6 +96,7 @@ UserSettings g_userSettings = {
         .vrSinglePassStereo {"game.vrSinglePassStereo", true},
         .vrRenderScale {"game.vrRenderScale", 1.0f},
         .vrSuperResolution {"game.vrSuperResolution", true},
+        .vrAdaptiveResolution {"game.vrAdaptiveResolution", true},
         .vrSpaceWarp {"game.vrSpaceWarp", false},
         .vrSpaceWarpDebugNegateMv {"game.vrSpaceWarpDebugNegateMv", false},
         .vrSpaceWarpDebugFlipMvY {"game.vrSpaceWarpDebugFlipMvY", false},
@@ -423,6 +424,7 @@ void registerSettings() {
     Register(g_userSettings.game.vrSinglePassStereo);
     Register(g_userSettings.game.vrRenderScale);
     Register(g_userSettings.game.vrSuperResolution);
+    Register(g_userSettings.game.vrAdaptiveResolution);
     Register(g_userSettings.game.vrSpaceWarp);
     Register(g_userSettings.game.vrSpaceWarpDebugNegateMv);
     Register(g_userSettings.game.vrSpaceWarpDebugFlipMvY);
