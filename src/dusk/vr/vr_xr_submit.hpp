@@ -2141,8 +2141,8 @@ public:
         }
     }
 
-    // Call ONCE per frame from submitFrame() (after aurora::gfx::synchronize()
-    // has confirmed the render worker submitted this frame's Dawn work),
+    // Call ONCE per frame from vr_main.cpp's completeFrame() (on aurora's
+    // render worker, right after it submitted this frame's Dawn work),
     // in place of the per-eye readbackEyeCopy() loop, when usesSharedImageGpuDirect()
     // is true. width/height are the full double-wide dimensions, same as
     // beginSwapchainAccessForFrame() got this frame. Non-blocking in the
@@ -2334,7 +2334,7 @@ public:
     //                  spaceWarpBeginAccess()    -- BeginAccess this slot's MV/depth ExportedImages
     //                  (eye pass, resolved with .depth = true)
     //                  spaceWarpEncode()         -- push the MV pass (encoder task, render worker)
-    //   submitFrame(): finishSharedImageGpuCopy() -- EndAccess + XR-side copies, same submit as color
+    //   completeFrame(): finishSharedImageGpuCopy() -- EndAccess + XR-side copies, same submit as color
     //                  spaceWarpReleaseFrame()   -- release the two images
     //                  spaceWarpLayerInfo()      -- fill the per-eye chained structs
     //
