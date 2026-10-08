@@ -428,12 +428,9 @@ void registerSettings() {
     Register(g_userSettings.game.vrRenderScale);
     Register(g_userSettings.game.vrSuperResolution);
     Register(g_userSettings.game.vrAdaptiveResolution);
-<<<<<<< HEAD
     Register(g_userSettings.game.vrFoveation);
-=======
     Register(g_userSettings.game.vrMinResolution);
     Register(g_userSettings.game.vrHighClocks);
->>>>>>> quest-immersive-adaptive-res
     Register(g_userSettings.game.vrSpaceWarp);
     Register(g_userSettings.game.vrSpaceWarpDebugNegateMv);
     Register(g_userSettings.game.vrSpaceWarpDebugFlipMvY);
