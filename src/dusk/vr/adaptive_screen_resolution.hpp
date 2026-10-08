@@ -1,10 +1,7 @@
 #pragma once
 
 #include <algorithm>
-#include <array>
-#include <bit>
 #include <cmath>
-#include <cstddef>
 #include <cstdint>
 
 namespace dusk::vr {
@@ -14,77 +11,64 @@ struct ScreenResolution {
     std::uint32_t height;
 };
 
+// Dynamic render resolution, after GalaxyQuest's: a scale in 5% steps between a floor
+// and 100%. Two frames that miss refreshes less than a second apart drop it two steps
+// and keep it below the scale that missed for 20 s; it rises one step after 1.5 s
+// without misses, changes or a busy frame. Misses in the 300 ms after a change are
+// reallocation hitches and don't count. Time is the runtime's predicted display time.
 class AdaptiveScreenResolution {
 public:
+    // Call once per eligible XR refresh, not once per rendered eye pair. minPercent is
+    // the floor (live setting). waitFrameMs is runtime pacing headroom, not a GPU timing
+    // measurement: a frame that barely waited in xrWaitFrame is busy.
     void observe(std::int64_t predictedDisplayTimeNs, std::int64_t predictedDisplayPeriodNs,
-                 double waitFrameMs, bool frameEligible) noexcept {
-        // Call once per eligible XR refresh, not once per rendered eye pair.
-        // Display-time gaps reveal missed refreshes; waitFrameMs is runtime pacing headroom,
-        // not a GPU timing measurement.
+                 double waitFrameMs, int minPercent, bool frameEligible) noexcept {
         if (!frameEligible || predictedDisplayTimeNs <= 0 || predictedDisplayPeriodNs <= 0 ||
             !std::isfinite(waitFrameMs) || waitFrameMs < 0.0) {
             lastDisplayTimeNs_ = 0;
-            resetFeedback();
             return;
         }
 
-        if (lastDisplayTimeNs_ == 0) {
-            lastDisplayTimeNs_ = predictedDisplayTimeNs;
-            resetFeedback();
+        const std::int64_t now = predictedDisplayTimeNs;
+        const int floor = std::clamp(minPercent, 1, 100);
+        if (percent_ < floor) {
+            setPercent(floor, now); // the floor was raised
+        }
+        if (lastDisplayTimeNs_ == 0 || now <= lastDisplayTimeNs_) {
+            // (Re)starting: nothing to judge yet, and headroom has to show afresh.
+            lastDisplayTimeNs_ = now;
+            quietSinceNs_ = now;
             return;
         }
 
-        if (predictedDisplayTimeNs <= lastDisplayTimeNs_) {
-            lastDisplayTimeNs_ = predictedDisplayTimeNs;
-            resetFeedback();
+        const std::int64_t refreshes =
+            (now - lastDisplayTimeNs_ + predictedDisplayPeriodNs / 2) / predictedDisplayPeriodNs;
+        lastDisplayTimeNs_ = now;
+        if (now < ignoreUntilNs_) {
             return;
         }
 
-        const std::int64_t deltaNs = predictedDisplayTimeNs - lastDisplayTimeNs_;
-        lastDisplayTimeNs_ = predictedDisplayTimeNs;
-        const std::int64_t remainder = deltaNs % predictedDisplayPeriodNs;
-        const bool roundUp = remainder >= predictedDisplayPeriodNs / 2 + predictedDisplayPeriodNs % 2;
-        const std::int64_t elapsedFrames =
-            deltaNs / predictedDisplayPeriodNs + (roundUp ? 1 : 0);
-        const std::int64_t remainderNs = roundUp ? remainder - predictedDisplayPeriodNs : remainder;
-        if (elapsedFrames < 1 || elapsedFrames > kMaxGapFrames ||
-            remainderNs < -predictedDisplayPeriodNs / 4 ||
-            remainderNs > predictedDisplayPeriodNs / 4) {
-            resetFeedback();
-            return;
-        }
-
-        if (warmupIntervals_ < kWarmupIntervals) {
-            ++warmupIntervals_;
-            return;
-        }
-
-        const bool missed = elapsedFrames > 1;
-        missWindow_ = ((missWindow_ << 1) | (missed ? 1u : 0u)) & kMissWindowMask;
-        if (missed) {
-            headroomNs_ = 0;
-            if (std::popcount(missWindow_) >= kMissedIntervalsToLower) {
-                tier_ = std::min(tier_ + 1, kScalePercent.size() - 1);
-                missWindow_ = 0;
+        if (refreshes > 1) {
+            // One frame counts once however many refreshes it missed: a single hitch
+            // (shader compile, stall) can miss several, an overloaded GPU keeps missing.
+            quietSinceNs_ = now;
+            missCount_ = missCount_ > 0 && now - lastMissNs_ < kMissWindowNs ? missCount_ + 1 : 1;
+            lastMissNs_ = now;
+            if (missCount_ >= 2) {
+                ceilingPercent_ = percent_ - kStepPercent;
+                ceilingUntilNs_ = now + kCeilingNs;
+                setPercent(std::max(floor, percent_ - 2 * kStepPercent), now);
             }
             return;
         }
 
-        if (tier_ == 0) {
-            headroomNs_ = 0;
+        if (waitFrameMs * 1'000'000.0 < static_cast<double>(predictedDisplayPeriodNs) * kHeadroomFraction) {
+            quietSinceNs_ = now;
             return;
         }
-
-        const double periodMs = static_cast<double>(predictedDisplayPeriodNs) / 1'000'000.0;
-        if (waitFrameMs < periodMs * kHeadroomFraction) {
-            headroomNs_ = 0;
-            return;
-        }
-
-        headroomNs_ = std::min(kRecoveryNs, headroomNs_ + deltaNs);
-        if (headroomNs_ >= kRecoveryNs) {
-            --tier_;
-            headroomNs_ = 0;
+        if (percent_ < 100 && now - quietSinceNs_ >= kRecoveryNs &&
+            (percent_ + kStepPercent <= ceilingPercent_ || now >= ceilingUntilNs_)) {
+            setPercent(std::min(percent_ + kStepPercent, 100), now);
         }
     }
 
@@ -106,33 +90,36 @@ public:
                 static_cast<std::uint64_t>(width) * baseHeight / baseWidth);
         }
 
-        const std::uint32_t scale = kScalePercent[tier_];
-        return {static_cast<std::uint32_t>(static_cast<std::uint64_t>(width) * scale / 100),
-                static_cast<std::uint32_t>(static_cast<std::uint64_t>(height) * scale / 100)};
+        const auto scale = static_cast<std::uint64_t>(percent_);
+        return {static_cast<std::uint32_t>(width * scale / 100),
+                static_cast<std::uint32_t>(height * scale / 100)};
     }
 
 private:
-    static constexpr std::array<std::uint32_t, 4> kScalePercent{100, 85, 70, 60};
+    static constexpr int kStepPercent = 5;
+    static constexpr std::int64_t kMissWindowNs = 1'000'000'000;
+    static constexpr std::int64_t kCooldownNs = 300'000'000;
     static constexpr std::int64_t kRecoveryNs = 1'500'000'000;
-    static constexpr unsigned kWarmupIntervals = 8;
-    // Two missed intervals among the last four lower one tier: alternating rendered/cached
-    // refreshes still register as sustained pressure, while one isolated miss ages out.
-    static constexpr unsigned kMissWindowMask = 0b1111;
-    static constexpr int kMissedIntervalsToLower = 2;
-    static constexpr std::int64_t kMaxGapFrames = 4;
+    static constexpr std::int64_t kCeilingNs = 20'000'000'000;
     static constexpr double kHeadroomFraction = 0.20;
 
-    void resetFeedback() noexcept {
-        warmupIntervals_ = 0;
-        missWindow_ = 0;
-        headroomNs_ = 0;
+    // Every decision, even one the floor leaves without effect, restarts the miss count,
+    // the cooldown and the recovery wait.
+    void setPercent(int percent, std::int64_t now) noexcept {
+        percent_ = percent;
+        missCount_ = 0;
+        ignoreUntilNs_ = now + kCooldownNs;
+        quietSinceNs_ = now;
     }
 
     std::int64_t lastDisplayTimeNs_ = 0;
-    std::int64_t headroomNs_ = 0;
-    unsigned warmupIntervals_ = 0;
-    unsigned missWindow_ = 0;
-    std::size_t tier_ = 0;
+    std::int64_t lastMissNs_ = 0;
+    std::int64_t ignoreUntilNs_ = 0;
+    std::int64_t quietSinceNs_ = 0;
+    std::int64_t ceilingUntilNs_ = 0;
+    int ceilingPercent_ = 100;
+    int missCount_ = 0;
+    int percent_ = 100;
 };
 
 } // namespace dusk::vr

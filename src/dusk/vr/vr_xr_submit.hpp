@@ -1922,7 +1922,7 @@ public:
         selectSharedSize(width, height);
         const uint32_t slotIndex = sharedNextSlot_;
         // All slots of a new size in one frame: one creation hitch, not one per
-        // slot (two missed refreshes in a row would lower the adaptive tier again).
+        // slot (the adaptive controller ignores misses only for 300 ms after a change).
         for (uint32_t i = 0; i < kSharedSlotCount; ++i) {
             ensureSharedImageResources(i, width, height);
         }
@@ -1965,11 +1965,12 @@ public:
     }
 
     // The staging image is sized per frame: immersive eyes render at the
-    // adaptive tier's size (vr_main.cpp's tick()), screen mode at the full
+    // adaptive scale's size (vr_main.cpp's tick()), screen mode at the full
     // size. Each size's slots are created on first use and parked while
-    // another size is current, so a tier change swaps sets instead of
+    // another size is current, so a scale change swaps sets instead of
     // recreating images. Parked slots keep their fences, waited on as usual
-    // when their size comes back. At most one set per tier.
+    // when their size comes back. At most one set per size the controller
+    // visits: 100% down to the floor in 5% steps (up to 11 at a 50% floor).
     struct SharedSizeSet {
         uint32_t width = 0;
         uint32_t height = 0;

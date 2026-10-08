@@ -320,15 +320,22 @@ struct UserSettings {
         // crisper. Default true on standalone.
         ConfigVar<bool> vrSuperResolution;
         // Adaptive per-eye resolution in immersive VR: lowers the eye render size
-        // (down to 60%) while frames are being missed and raises it back with
-        // headroom. Off keeps fixed full-size eyes. Default true.
+        // in 5% steps (down to vrMinResolution) while frames keep missing refreshes
+        // and raises it back with headroom. Off keeps fixed full-size eyes. Default true.
         ConfigVar<bool> vrAdaptiveResolution;
-        // Fixed foveated rendering on the single-pass stereo eye pass
-        // (VK_EXT_fragment_density_map, standalone Quest): 0 Off, 1 Low,
-        // 2 Medium, 3 High -- each step shrinks the full-resolution centre of
-        // each eye; the periphery drops to 1/2 then 1/4 resolution. Inert
-        // where unsupported (PC, two-pass). Default 2.
-        ConfigVar<int> vrFoveation;
+ // Fixed foveated rendering on single-pass stereo eye pass
+ // (VK_EXT_fragment_density_map, standalone Quest): 0 Off, 1 Low,
+ // 2 Medium, 3 High -- each step shrinks full-resolution centre
+ // of each eye; periphery drops to 1/2 then 1/4 resolution. Inert
+ // where unsupported (PC, two-pass). Default 2.
+ ConfigVar<int> vrFoveation;
+ // Adaptive resolution's floor in percent (50..100, default 80). Giant
+ // Screen's picture goes down three quarters of it (at least 50%).
+ ConfigVar<int> vrMinResolution;
+ // XR_EXT_performance_settings: request runtime's SUSTAINED_HIGH CPU and
+ // GPU levels (standalone Quest). Off leaves runtime's default clocks.
+ // Read once at VR startup. Default true.
+ ConfigVar<bool> vrHighClocks;
         // Application SpaceWarp (XR_FB_space_warp, standalone Quest only):
         // the app submits per-eye motion vectors + depth alongside the
         // color image and the runtime synthesizes every other frame,

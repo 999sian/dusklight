@@ -6,126 +6,155 @@
 
 namespace {
 
-constexpr std::int64_t kPeriodNs = 10'000'000;
-constexpr double kHeadroomWaitMs = 3.0; // >= 20% of the period
-constexpr double kTightWaitMs = 1.0;    // < 20% of the period
+constexpr std::int64_t kPeriodNs = 10'000'000; // 100 refreshes a second
+constexpr double kHeadroomWaitMs = 3.0;         // >= 20% of the period
+constexpr double kTightWaitMs = 1.0;            // < 20% of the period
 
 struct Refreshes {
     dusk::vr::AdaptiveScreenResolution controller;
     std::int64_t displayTimeNs = 1'000'000'000;
+    int minPercent = 80;
+
+    Refreshes() { controller.observe(displayTimeNs, kPeriodNs, kTightWaitMs, minPercent, true); }
 
     void interval(std::int64_t periods, double waitMs = kTightWaitMs) {
         displayTimeNs += periods * kPeriodNs;
-        controller.observe(displayTimeNs, kPeriodNs, waitMs, true);
+        controller.observe(displayTimeNs, kPeriodNs, waitMs, minPercent, true);
     }
 
-    void warmUp() {
-        controller.observe(displayTimeNs, kPeriodNs, kHeadroomWaitMs, true);
-        for (int i = 0; i < 8; ++i) {
-            interval(1, kHeadroomWaitMs);
+    void onTime(int count, double waitMs = kTightWaitMs) {
+        for (int i = 0; i < count; ++i) {
+            interval(1, waitMs);
         }
     }
 
-    void expectSize(std::uint32_t width, std::uint32_t height) const {
-        const auto size = controller.resolution(1600, 900, 2000, 1200);
-        assert(size.width == width);
-        assert(size.height == height);
+    // A sustained-pressure drop: two missed frames 10 ms apart.
+    void drop() {
+        interval(2);
+        interval(2);
     }
+
+    int percent() const { return static_cast<int>(controller.resolution(1000, 500, 2000, 1000).width / 10); }
 };
 
 } // namespace
 
 int main() {
-    // Isolated misses, including one longer hitch, age out without lowering.
+    // Isolated misses, including one long hitch, never lower: each is over a second
+    // after the previous one.
     {
         Refreshes r;
-        r.warmUp();
-        r.interval(2);
-        r.interval(1);
-        r.interval(1);
-        r.interval(1);
-        r.interval(2);
-        r.interval(1);
-        r.interval(1);
-        r.interval(1);
         r.interval(3);
-        r.expectSize(1600, 900);
+        r.onTime(100);
+        r.interval(40);
+        r.onTime(100);
+        r.interval(2);
+        assert(r.percent() == 100);
     }
 
-    // Half-rate cadence: each rendered refresh misses while the cached refresh fits.
+    // Two missed frames within a second lower two steps (10%).
     {
         Refreshes r;
-        r.warmUp();
         r.interval(2);
-        r.interval(1);
-        r.expectSize(1600, 900);
+        r.onTime(90);
+        assert(r.percent() == 100);
         r.interval(2);
-        r.expectSize(1360, 765);
-        r.interval(1);
-        r.interval(2);
-        r.interval(1);
-        r.interval(2);
-        r.expectSize(1120, 630);
+        assert(r.percent() == 90);
     }
 
-    // Recovery needs 1.5 s of on-time refreshes that also show runtime wait headroom.
+    // The floor holds, and a raised floor lifts the scale at once.
     {
         Refreshes r;
-        r.warmUp();
-        r.interval(2);
-        r.interval(2);
-        r.expectSize(1360, 765);
-        for (int i = 0; i < 150; ++i) {
-            r.interval(1, kTightWaitMs);
+        r.drop();
+        assert(r.percent() == 90);
+        r.onTime(30);
+        r.drop();
+        assert(r.percent() == 80);
+        r.onTime(30);
+        r.drop();
+        assert(r.percent() == 80);
+        r.minPercent = 95;
+        r.interval(1);
+        assert(r.percent() == 95);
+    }
+
+    // Overload where every frame misses several refreshes (the device log that stayed at
+    // 100%) still lowers, down to the floor.
+    {
+        Refreshes r;
+        r.minPercent = 50;
+        for (int i = 0; i < 100; ++i) {
+            r.interval(5);
         }
-        r.expectSize(1360, 765);
-        for (int i = 0; i < 149; ++i) {
-            r.interval(1, kHeadroomWaitMs);
-        }
-        r.expectSize(1360, 765);
-        r.interval(1, kHeadroomWaitMs);
-        r.expectSize(1600, 900);
+        assert(r.percent() == 50);
     }
 
-    // Focus loss and long stalls restart warm-up without discarding the current tier.
+    // Misses in the 300 ms after a change are ignored: two there don't lower, and the
+    // first one counted afterwards starts a fresh pair.
     {
         Refreshes r;
-        r.warmUp();
+        r.drop();
+        assert(r.percent() == 90);
         r.interval(2);
         r.interval(2);
-        r.expectSize(1360, 765);
+        r.onTime(25);
+        assert(r.percent() == 90);
+        r.interval(2);
+        assert(r.percent() == 90);
+        r.interval(2);
+        assert(r.percent() == 80);
+    }
 
+    // Recovery: one step after 1.5 s of on-time refreshes with runtime wait headroom; a
+    // busy refresh restarts the wait.
+    {
+        Refreshes r;
+        r.drop();
+        assert(r.percent() == 90);
+        r.onTime(100, kHeadroomWaitMs);
+        r.onTime(1, kTightWaitMs);
+        r.onTime(149, kHeadroomWaitMs);
+        assert(r.percent() == 90);
+        r.onTime(1, kHeadroomWaitMs);
+        assert(r.percent() == 95);
+    }
+
+    // The ceiling: after a drop from 100 the scale may come back to 95 but not to 100
+    // until 20 s after the drop.
+    {
+        Refreshes r;
+        r.drop();
+        assert(r.percent() == 90);
+        r.onTime(149, kHeadroomWaitMs);
+        assert(r.percent() == 90);
+        r.onTime(1, kHeadroomWaitMs);
+        assert(r.percent() == 95);
+        r.onTime(1849, kHeadroomWaitMs);
+        assert(r.percent() == 95);
+        r.onTime(1, kHeadroomWaitMs);
+        assert(r.percent() == 100);
+    }
+
+    // An ineligible stretch (screen mode, setting off) is not a missed interval.
+    {
+        Refreshes r;
+        r.interval(2);
         r.displayTimeNs += kPeriodNs;
-        r.controller.observe(r.displayTimeNs, kPeriodNs, kTightWaitMs, false);
-        r.displayTimeNs += 50 * kPeriodNs;
-        r.controller.observe(r.displayTimeNs, kPeriodNs, kTightWaitMs, true);
-        r.interval(2);
-        r.interval(2);
-        r.expectSize(1360, 765);
-
-        for (int i = 0; i < 6; ++i) {
-            r.interval(1);
-        }
-        r.interval(10);
-        r.interval(2);
-        r.interval(2);
-        r.expectSize(1360, 765);
+        r.controller.observe(r.displayTimeNs, kPeriodNs, kTightWaitMs, r.minPercent, false);
+        r.displayTimeNs += 30 * kPeriodNs;
+        r.controller.observe(r.displayTimeNs, kPeriodNs, kTightWaitMs, r.minPercent, true);
+        r.onTime(10);
+        assert(r.percent() == 100);
     }
 
-    // Every tier fits the swapchain allocation, shrinks monotonically, and clamps at the floor.
+    // Sizes fit the allocation, keep the base aspect, and shrink with the scale.
     {
         Refreshes r;
-        r.warmUp();
-        std::uint32_t previousWidth = 0;
-        for (int tier = 0; tier < 4; ++tier) {
-            const auto size = r.controller.resolution(1600, 900, 1000, 400);
-            assert(size.width > 0 && size.width <= 1000);
-            assert(size.height > 0 && size.height <= 400);
-            assert(tier == 0 || size.width < previousWidth);
-            previousWidth = size.width;
-            r.interval(2);
-            r.interval(2);
-        }
-        assert(r.controller.resolution(1600, 900, 1000, 400).width == previousWidth);
+        const auto full = r.controller.resolution(1600, 900, 1000, 400);
+        assert(full.width == 711 && full.height == 400);
+        r.drop();
+        const auto lower = r.controller.resolution(1600, 900, 1000, 400);
+        assert(lower.width == 639 && lower.height == 360);
+        assert(r.controller.resolution(0, 900, 1000, 400).width == 0);
     }
 }
