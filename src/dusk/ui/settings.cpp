@@ -1212,9 +1212,21 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         config_bool_select(leftPane, rightPane, getSettings().game.vrAdaptiveResolution,
             {
                 .key = "Adaptive Resolution",
-                .helpText = "Lowers the in-headset render resolution (down to 60%) while the game is "
-                            "missing frames, and raises it back when there's headroom. Turn off if the "
-                            "picture gets blurry without motion getting smoother (CPU-bound areas). On by default."
+                .helpText = "Lowers the in-headset render resolution in 5% steps (down to Lowest Resolution) "
+                            "while the game keeps missing frames, and raises it back when there's headroom. Turn "
+                            "off if the picture gets blurry without motion getting smoother (CPU-bound areas). "
+                            "On by default."
+            });
+        config_int_select(leftPane, rightPane, getSettings().game.vrMinResolution,
+            "Lowest Resolution",
+            "How far adaptive resolution may lower the render resolution in immersive VR. The Giant "
+            "Screen's picture goes down to three quarters of this (at least 50%). 80% by default.",
+            50, 100, 5, {}, {}, "%");
+        config_bool_select(leftPane, rightPane, getSettings().game.vrHighClocks,
+            {
+                .key = "High Clocks",
+                .helpText = "Runs the headset's CPU and GPU faster, at the cost of more heat and battery. "
+                            "Applies from the next start. On by default."
             });
 #endif
 

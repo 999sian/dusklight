@@ -97,6 +97,8 @@ UserSettings g_userSettings = {
         .vrRenderScale {"game.vrRenderScale", 1.0f},
         .vrSuperResolution {"game.vrSuperResolution", true},
         .vrAdaptiveResolution {"game.vrAdaptiveResolution", true},
+        .vrMinResolution {"game.vrMinResolution", 80},
+        .vrHighClocks {"game.vrHighClocks", true},
         .vrSpaceWarp {"game.vrSpaceWarp", false},
         .vrSpaceWarpDebugNegateMv {"game.vrSpaceWarpDebugNegateMv", false},
         .vrSpaceWarpDebugFlipMvY {"game.vrSpaceWarpDebugFlipMvY", false},
@@ -425,6 +427,8 @@ void registerSettings() {
     Register(g_userSettings.game.vrRenderScale);
     Register(g_userSettings.game.vrSuperResolution);
     Register(g_userSettings.game.vrAdaptiveResolution);
+    Register(g_userSettings.game.vrMinResolution);
+    Register(g_userSettings.game.vrHighClocks);
     Register(g_userSettings.game.vrSpaceWarp);
     Register(g_userSettings.game.vrSpaceWarpDebugNegateMv);
     Register(g_userSettings.game.vrSpaceWarpDebugFlipMvY);

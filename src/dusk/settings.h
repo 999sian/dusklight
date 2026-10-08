@@ -320,9 +320,16 @@ struct UserSettings {
         // crisper. Default true on standalone.
         ConfigVar<bool> vrSuperResolution;
         // Adaptive per-eye resolution in immersive VR: lowers the eye render size
-        // (down to 60%) while frames are being missed and raises it back with
-        // headroom. Off keeps fixed full-size eyes. Default true.
+        // in 5% steps (down to vrMinResolution) while frames keep missing refreshes
+        // and raises it back with headroom. Off keeps fixed full-size eyes. Default true.
         ConfigVar<bool> vrAdaptiveResolution;
+        // Adaptive resolution's floor in percent (50..100, default 80). The Giant
+        // Screen's picture goes down to three quarters of it (at least 50%).
+        ConfigVar<int> vrMinResolution;
+        // XR_EXT_performance_settings: request the runtime's SUSTAINED_HIGH CPU and
+        // GPU levels (standalone Quest). Off leaves the runtime's default clocks.
+        // Read once at VR startup. Default true.
+        ConfigVar<bool> vrHighClocks;
         // Application SpaceWarp (XR_FB_space_warp, standalone Quest only):
         // the app submits per-eye motion vectors + depth alongside the
         // color image and the runtime synthesizes every other frame,

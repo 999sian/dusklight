@@ -123,6 +123,8 @@ std::unique_ptr<Session> g_uiSession;
 ScreenUiLayout g_screenUiLayout{};
 uint32_t g_maxLayerCount = 0;
 bool g_hasLayerSettings = false;
+// XR_META_recommended_layer_resolution, if advertised; see submitFrame().
+PFN_xrGetRecommendedLayerResolutionMETA g_xrGetRecommendedLayerResolutionMETA = nullptr;
 // RIGHT hand -> R (shield bash), added 2026-08-13 per explicit user request
 // ("if you thrust the right controller it should press R basically, as R
 // is shield bash"). This is the same infra originally drafted 2026-08-03
@@ -825,6 +827,7 @@ bool startup() {
         }
 #if DUSK_VR_XR_GRAPHICS_VULKAN
         g_hasLayerSettings = boot.hasLayerSettings;
+        g_xrGetRecommendedLayerResolutionMETA = boot.xrGetRecommendedLayerResolutionMETA_;
 #else
         g_hasLayerSettings = false;
 #endif
@@ -912,21 +915,20 @@ bool startup() {
         // vr-mod-notes). Both extensions are optional and only reach here
         // if vr_xr::initialize() found the runtime advertises them.
         //
-        // 1. XR_EXT_performance_settings: request SUSTAINED_HIGH for both
-        //    CPU and GPU. The runtime's default level is lower; the
-        //    intermittent frame dips on Quest 3 are partly clock-related.
-        //    BOOST exists too but is documented as short-term only (the
-        //    runtime backs off from it on its own) -- SUSTAINED_HIGH is the
-        //    standard "this is a demanding app" request.
-        if (boot.hasPerformanceSettings && boot.xrPerfSettingsSetPerformanceLevelEXT_) {
+        // 1. XR_EXT_performance_settings, game.vrHighClocks (default on):
+        //    request SUSTAINED_HIGH for both CPU and GPU instead of the
+        //    runtime's lower default; off leaves the runtime's choice. Not
+        //    BOOST: it's short-term only and the runtime rolls it back on
+        //    thermals (the 2026-09-20 GPU BOOST experiment still logged GPU
+        //    level 4 on Quest 2). Requested once per session, hence "from
+        //    the next start".
+        if (!dusk::getSettings().game.vrHighClocks.getValue()) {
+            duskVrLog("[dusk::vr::startup] High Clocks off -- runtime default clocks\n");
+        } else if (boot.hasPerformanceSettings && boot.xrPerfSettingsSetPerformanceLevelEXT_) {
             const XrResult cpuRes = boot.xrPerfSettingsSetPerformanceLevelEXT_(
                 session, XR_PERF_SETTINGS_DOMAIN_CPU_EXT, XR_PERF_SETTINGS_LEVEL_SUSTAINED_HIGH_EXT);
-            // EXPERIMENT 2026-09-20: BOOST for the GPU (was SUSTAINED_HIGH).
-            // Meta's VrApi stats line showed GPU level 4 @ 640MHz with the
-            // app GPU-bound (App=13.6ms, GPU%=0.85) -- checking whether the
-            // top level is reachable and what it buys.
             const XrResult gpuRes = boot.xrPerfSettingsSetPerformanceLevelEXT_(
-                session, XR_PERF_SETTINGS_DOMAIN_GPU_EXT, XR_PERF_SETTINGS_LEVEL_BOOST_EXT);
+                session, XR_PERF_SETTINGS_DOMAIN_GPU_EXT, XR_PERF_SETTINGS_LEVEL_SUSTAINED_HIGH_EXT);
             char msg[192];
             std::snprintf(msg, sizeof(msg),
                           "[dusk::vr::startup] XR_EXT_performance_settings: SUSTAINED_HIGH cpu=%d gpu=%d\n",
@@ -935,6 +937,9 @@ bool startup() {
         } else {
             duskVrLog("[dusk::vr::startup] XR_EXT_performance_settings not available -- runtime default clocks\n");
         }
+        duskVrLog(g_xrGetRecommendedLayerResolutionMETA
+                      ? "[dusk::vr::startup] XR_META_recommended_layer_resolution: queried every immersive frame\n"
+                      : "[dusk::vr::startup] XR_META_recommended_layer_resolution not available\n");
 
         // 2. XR_KHR_android_thread_settings: tell the runtime which of our
         //    threads are the hot ones so it keeps them on the big cores.
@@ -3118,8 +3123,11 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     // FOV, fewer pixels. On Vulkan the shared staging image is opened at this
     // size (Session keeps one set per size), so single-pass still renders
     // straight into it. Setting off, screen mode and space warp: full size.
+    // game.vrMinResolution is the eyes' floor; the giant screen's picture gets
+    // three quarters of it (at least 50%), as in GalaxyQuest.
     const bool adaptiveEyes =
         dusk::getSettings().game.vrAdaptiveResolution.getValue() && !screenMode && !spaceWarpWanted;
+    const int minResolution = std::clamp(dusk::getSettings().game.vrMinResolution.getValue(), 50, 100);
     if (!adaptiveEyes) {
         g_eyeResolution = AdaptiveScreenResolution{}; // full size; re-entering starts there
     }
@@ -3138,7 +3146,7 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
     // frame, so BeginAccess must only be opened once, not once per eye.
     // D3D12: full (double-wide) dimensions, matching exactly what startup()'s
     // createSwapchain(eyeWidth * 2, eyeHeight, ...) call actually allocated.
-    // Vulkan: this frame's eye size (the staging image is sized per tier).
+    // Vulkan: this frame's eye size (the staging image is sized per adaptive scale).
     // beginSwapchainAccessForFrame() now has a real implementation on BOTH
     // branches (D3D12: wraps the real swapchain texture directly, see
     // sameDeviceAsAurora_'s comment; Vulkan: wraps an exported-memory
@@ -3417,7 +3425,8 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
             }
         }
         g_screenResolution.observe(frameState.predictedDisplayTime, frameState.predictedDisplayPeriod,
-                                   g_perfWaitFrameMs, plan.cacheable && quadCount > 0);
+                                   g_perfWaitFrameMs, std::max(minResolution * 3 / 4, 50),
+                                   plan.cacheable && quadCount > 0);
 
         const float width = vr_render::kScreenModeWidthMeters *
                             std::clamp(dusk::getSettings().game.vrScreenModeWidth.getValue(), 0.5f, 2.5f);
@@ -3445,7 +3454,7 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         // The immersive eye path reuses the Session copy slots the cache lives in.
         g_screenPairs.invalidate();
         g_screenResolution.observe(frameState.predictedDisplayTime, frameState.predictedDisplayPeriod,
-                                   g_perfWaitFrameMs, false);
+                                   g_perfWaitFrameMs, minResolution, false);
         g_pendingSubmit.screenQuadCount = 0;
     }
     // Desktop mirror: captured from eye 0 (left) inside the loop below,
@@ -3782,7 +3791,7 @@ void tick(const dusk::game_clock::FrameTiming& pacing) {
         eyesRendered = eyesRendered || e.valid;
     }
     g_eyeResolution.observe(frameState.predictedDisplayTime, frameState.predictedDisplayPeriod, g_perfWaitFrameMs,
-                            adaptiveEyes && eyesRendered);
+                            minResolution, adaptiveEyes && eyesRendered);
 
     // Desktop mirror (user request 2026-08-10): show eye 0's just-rendered
     // frame on the desktop window instead of leaving it stale/blank, which
@@ -4012,6 +4021,16 @@ void submitFrame() {
     uint32_t layerCount = 0;
     if (!g_pendingSubmit.screenMode) {
         layers[layerCount++] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&projLayer);
+        // XR_META_recommended_layer_resolution: asking about the eye layer tells the
+        // runtime the app scales its own resolution, which is what lets Quest 3 raise
+        // the GPU to level 5 (GalaxyQuest's finding). The recommendation goes unused.
+        if (g_xrGetRecommendedLayerResolutionMETA) {
+            XrRecommendedLayerResolutionGetInfoMETA info{XR_TYPE_RECOMMENDED_LAYER_RESOLUTION_GET_INFO_META};
+            info.layer = layers[0];
+            info.predictedDisplayTime = g_pendingSubmit.frameState.predictedDisplayTime;
+            XrRecommendedLayerResolutionMETA recommended{XR_TYPE_RECOMMENDED_LAYER_RESOLUTION_META};
+            g_xrGetRecommendedLayerResolutionMETA(g_session->session(), &info, &recommended);
+        }
     } else {
         for (uint32_t i = 0; i < g_pendingSubmit.screenQuadCount; ++i) {
             auto& q = g_pendingSubmit.screenQuads[i];
