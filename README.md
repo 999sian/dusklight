@@ -1,12 +1,10 @@
-<div align="center">
-  <img src="res/logo.png" alt="Logo" width="640">
+# Unofficial Fork
 
-  <p align="center">
-    <a href="https://twilitrealm.dev">Official Website</a>
-    •
-    <a href="https://discord.gg/6NpMhefCK9">Discord</a>
-  </p>
-</div>
+This was an unofficial fork of Dusklight for UWP.
+
+**Development has been discontinued, and this repository will no longer receive updates or support.**
+
+If anyone wants to continue development, they're welcome to fork the repository and maintain their own version.
 
 # Overview
 
