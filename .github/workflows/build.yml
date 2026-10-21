@@ -72,6 +72,23 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $packages = @(Get-ChildItem build-uwp -Recurse -Include *.appx,*.msix,*.appxbundle,*.msixbundle)
           if (!$packages.Count) { throw 'Build succeeded without an installable UWP package.' }
+          $package = $packages | Where-Object { $_.Name -like 'dusklight_*.msix' } | Select-Object -First 1
+          if (!$package) { throw 'Dusklight MSIX was not produced.' }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
+          try {
+            $entry = $zip.GetEntry('resources.pri')
+            if (!$entry) { throw 'Package has no resource index.' }
+            $pri = Join-Path $env:RUNNER_TEMP 'dusklight-resources.pri'
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $pri, $true)
+          } finally { $zip.Dispose() }
+          $dump = Join-Path $env:RUNNER_TEMP 'dusklight-resources.xml'
+          makepri dump /if $pri /of $dump /o
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $index = Get-Content $dump -Raw
+          foreach ($image in @('SplashScreen.png', 'Square150x150Logo.png', 'Square44x44Logo.png')) {
+            if (!$index.Contains($image)) { throw "Resource index is missing $image" }
+          }
 
       - name: Upload installable package
         uses: actions/upload-artifact@v7

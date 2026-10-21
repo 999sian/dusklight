@@ -11,5 +11,9 @@ file(GLOB _uwp_dlls "${AURORA_UWP_DEP_ROOT}/x64/bin/*.dll")
 target_sources(dusklight PRIVATE ${_uwp_manifest} ${_uwp_dlls})
 set_source_files_properties(${_uwp_dlls} PROPERTIES
     VS_DEPLOYMENT_CONTENT TRUE VS_DEPLOYMENT_LOCATION "." VS_COPY_TO_OUT_DIR Always)
-uwp_pkg(dusklight "${CMAKE_CURRENT_LIST_DIR}/Assets" "Assets")
+file(GLOB _uwp_assets "${CMAKE_CURRENT_LIST_DIR}/Assets/*.png")
+target_sources(dusklight PRIVATE ${_uwp_assets})
+# Image items must enter the PRI index so unqualified manifest paths resolve.
+set_source_files_properties(${_uwp_assets} PROPERTIES
+    VS_TOOL_OVERRIDE Image VS_DEPLOYMENT_CONTENT TRUE VS_DEPLOYMENT_LOCATION "Assets")
 uwp_pkg(dusklight "${CMAKE_SOURCE_DIR}/res" "res")
