@@ -4,9 +4,9 @@ The `Build Xbox UWP (experimental)` workflow uses a Windows 2022 cloud runner.
 No local Windows PC is required. Builds currently use the discontinued UWP
 1.1.1 source as a baseline; this is not a Dusklight 2.0.3 port yet.
 
-GitHub currently blocks runs on this fork due to the scale of Actions usage.
-Sign in as the repository owner and re-enable workflows from the Actions
-page before dispatching the build on `xbox-one-s-uwp`.
+Run the workflow on the `xbox-one-s-uwp` branch. If GitHub disables runs on
+the fork, sign in as the repository owner and re-enable workflows from
+the Actions page.
 
 The workflow compiles x64 game libraries with the DLL CRT, then builds and
 signs the existing UWP launcher. Both stages use the same pinned UWP
@@ -15,6 +15,9 @@ dependency revision. The temporary signing key stays on the runner.
 After a successful run, download `dusklight-uwp-experimental-x64` from Actions,
 extract it, and use Xbox Device Portal to install the package and its x64
 dependencies. Set the installed app's type to Game in Developer Mode.
+Microsoft documents DirectX 12 support on Xbox One for games, plus a
+5 GB foreground memory limit, in its
+[resource allocation guide](https://learn.microsoft.com/en-us/windows/uwp/xbox-apps/system-resource-allocation).
 Supply your own supported game dump. Back up existing saves before testing.
 
 The development certificate changes between runs, so repeated installations

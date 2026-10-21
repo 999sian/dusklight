@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  SCCACHE_GHA_ENABLED: "true"
+
 jobs:
   uwp:
     runs-on: windows-2022
@@ -25,6 +28,8 @@ jobs:
         with:
           arch: amd64
 
+      - uses: mozilla-actions/sccache-action@v0.0.9
+
       - name: Check out pinned UWP dependencies
         uses: actions/checkout@v6
         with:
@@ -37,6 +42,7 @@ jobs:
           cmake -S . -B build/game -G Ninja `
             -DCMAKE_BUILD_TYPE=RelWithDebInfo `
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache `
             -DDUSK_UWP=ON -DDUSK_ENABLE_DISCORD=OFF `
             -DAURORA_UWP_DEP_SOURCE_DIR="$env:GITHUB_WORKSPACE/build/uwp-dep"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

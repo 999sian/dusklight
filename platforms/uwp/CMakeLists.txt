@@ -67,14 +67,14 @@ add_executable(${PROJECT_NAME} WIN32
 )
 
 set(BinDeps
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/bin/dxcompiler.dll
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/bin/dxil.dll
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/bin/libuwp.dll
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/bin/nod.dll
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/bin/SDL3.dll
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/bin/webgpu_dawn.dll
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/bin/libpng16.dll
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/bin/z.dll
+	${uwplibs_SOURCE_DIR}/x64/bin/dxcompiler.dll
+	${uwplibs_SOURCE_DIR}/x64/bin/dxil.dll
+	${uwplibs_SOURCE_DIR}/x64/bin/libuwp.dll
+	${uwplibs_SOURCE_DIR}/x64/bin/nod.dll
+	${uwplibs_SOURCE_DIR}/x64/bin/SDL3.dll
+	${uwplibs_SOURCE_DIR}/x64/bin/webgpu_dawn.dll
+	${uwplibs_SOURCE_DIR}/x64/bin/libpng16.dll
+	${uwplibs_SOURCE_DIR}/x64/bin/z.dll
 
 	Package.appxmanifest
 )
@@ -106,16 +106,16 @@ target_sources(${PROJECT_NAME} PRIVATE
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/include
+	${uwplibs_SOURCE_DIR}/x64/include
 )
 
 set(BinLibs
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/lib/libuwp.lib
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/lib/nod.lib
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/lib/SDL3.lib
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/lib/webgpu_dawn.lib
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/lib/libpng16.lib
-	${CMAKE_BINARY_DIR}/_deps/uwplibs-src/x64/lib/z.lib
+	${uwplibs_SOURCE_DIR}/x64/lib/libuwp.lib
+	${uwplibs_SOURCE_DIR}/x64/lib/nod.lib
+	${uwplibs_SOURCE_DIR}/x64/lib/SDL3.lib
+	${uwplibs_SOURCE_DIR}/x64/lib/webgpu_dawn.lib
+	${uwplibs_SOURCE_DIR}/x64/lib/libpng16.lib
+	${uwplibs_SOURCE_DIR}/x64/lib/z.lib
 
 	${DUSK_DIR}/extern/aurora/aurora_card.lib
 	${DUSK_DIR}/extern/aurora/aurora_core.lib
