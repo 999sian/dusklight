@@ -5,6 +5,26 @@ Device Portal again before continuing.
 
 ## Optimization and mod support work
 
+**Current installed package: 2.0.3.49**, code source `9331db1`, successful run
+`39666098488`. The signed MSIX contains a nonzero symbol descriptor and valid
+SYMGEN header; all three mod DLLs contain one metadata header. Installed in
+place with all five saved settings/save hashes unchanged from backup
+`before-v2-20261021-211514`.
+
+On Xbox, the game loads **239,095 symbols** and all three native mods pass
+metadata validation and `mod_initialize`: **Cosmetics, Luau and Randomizer**.
+The log reports **3/3 active** with no missing-manifest/hook-resolution warnings
+in the captured startup log. Normal startup stays running at 30 seconds and
+renders the menu. Evidence: `v49-startup.log` and `v49-first-launch.png`.
+A bounded follow-up launch stayed running through 86.52 seconds and rendered
+the game menu/background with all three mods active. Evidence: `v49-intro-test.log`
+and `v49-intro-2.png`. This did not exercise Play or sustained gameplay. The
+screen reports “No device assigned”; controller setup/input, audio output and
+the browser download/install UI remain unverified. After stopping the app,
+Device Portal confirmed config.json restored byte-for-byte. No temporary mod
+packages remain; only the cache and an empty isolation directory remain in mods.
+
+
 Luau script execution is now verified on Xbox package 48: a temporary `.dusk`
 using runtime `dev.twilitrealm.luau@1.0` logs success from both its main script
 and its first `host.on_update` callback. The process remains running for the
@@ -22,10 +42,10 @@ Logs explain the remaining hook failures: no embedded symbol manifest.
 Runtime reports **2/3 mods active**, which does not establish that Randomizer's
 unresolved hooks work. Evidence: `v48-startup.log` and `v48-first-launch.png`.
 
-Run `39666098488` builds package 49 with the symbol-layout packaging correction.
+Run `39666098488` successfully built package 49 with the symbol-layout packaging correction.
 GitHub generated duplicate push run `39666098882` (package 50), canceled early;
-keep 49. Latest source is `9331db1`. Package 49 still needs full build, signed
-archive inspection and a console launch before recording hook support.
+keep 49. Package code source is `9331db1`; later commits record documentation.
+Signed archive inspection and console initialization checks passed as recorded above.
 
 
 Also confirmed a packaging issue in 47: its executable contains `.symdbh` with
@@ -35,7 +55,8 @@ packaged executable and matching PDB locally creates `.symdb` and fills the
 descriptor (RVA `0x1c06000`, size `0x3676e7`). The packaging correction embeds
 into the unpacked MSIX layout, regenerates the block map and signs it again.
 This avoids UWP's staging before the existing POST_BUILD embedding. The
-resulting signed MSIX and hook resolution still require CI/hardware checks.
+resulting signed MSIX and hook initialization checks passed on package 49;
+individual hook behavior during gameplay remains unverified.
 
 
 Follow-up verification on 47: the exact folder-only manifest test that exited
@@ -139,7 +160,7 @@ that Xbox UWP does not provide; compatibility must be checked on hardware.
 - WebSocket services remain unavailable in this port. Mods requiring them
   are not yet supported.
 
-The working installed baseline remains **2.0.3.37**. Its startup menu displayed
+The earlier working baseline was **2.0.3.37**; package 49 is now installed. Its startup menu displayed
 60 FPS; a later intro/title screenshot at the saved 2x-resolution/interpolation
 settings displayed 47 FPS. These isolated readings are not benchmarks or proof
 of a CPU bottleneck. Device Portal reported zero CPU in samples even while
@@ -166,7 +187,7 @@ facts and remaining limits.
 ## Current result
 
 Dusklight based on upstream **v2.0.3 builds successfully and installs on the
-Xbox One S**. Installed package **2.0.3.37** initializes D3D12, loads the
+Xbox One S**. Installed package **2.0.3.49** initializes D3D12, loads the
 European Twilight Princess ISO and renders the startup menu and game intro.
 **Package 2.0.3.33 froze on a black screen at 0 FPS when starting the game;
 that freeze is now fixed (2.0.3.37, see below). Full gameplay is not yet verified.**
@@ -221,8 +242,8 @@ the app: uninstalling can remove its data.
 | Local checkout | `/home/sian/Documents/dusklight-uwp` |
 | Active branch | `xbox-one-s-uwp-v2.0.3` |
 | Upstream v2.0.3 base | `40457c6adb381928e4b5fef6ed459ed291edd5e2` |
-| Working baseline source | `af9cb1b6afb513899fef8ecc35f528a25a353974` |
-| Current optimization/mod build source | `b5be9f8` (run `39660091944`, CI pending) |
+| Earlier working baseline source | `af9cb1b6afb513899fef8ecc35f528a25a353974` |
+| Current installed optimization/mod build source | `9331db1` (run `39666098488`, passed) |
 | Aurora fork | https://github.com/999sian/aurora — branch `xbox-one-s-v2.0.3`, pin `13baa5a` |
 | Borealis fork | https://github.com/999sian/borealis — branch `xbox-one-s-v2.0.3`, pin `2b0b5b6` |
 | Pinned binary dependencies | SternXD/uwp-dep `810cdcb672383045a8b03d1d55bb535352d7d46f` |

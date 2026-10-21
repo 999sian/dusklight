@@ -1,9 +1,9 @@
 # Xbox One S logging and shader-cache checks
 
-Checked 21 October 2026. Package 2.0.3.37 is the known working baseline.
-Later package 42 isolation tests below verify logging/cache persistence while
-bypassing the mod discovery startup exit. Package 46 is currently installed;
-normal startup still fails, and build 47 is testing a folder-scanning correction.
+Checked 21 October 2026. Package 2.0.3.49 is installed and boots with all three
+bundled native mods initialized. Package 42 isolation tests below verify
+logging/cache persistence separately. No CPU/FPS improvement or cache hit-rate
+claim is established by those checks.
 
 ## Buffered logging
 
@@ -16,8 +16,9 @@ low-severity messages; Device Portal crash capture remains available.
 
 This is a deletion of diagnostic behavior, so no extra logging option or new
 logging implementation was added. The existing Borealis `Log.ExtraSink` test
-covers flushing at the default threshold. That test was not run in this review; the new Xbox package still needs
-verification. No CPU/FPS improvement is claimed yet.
+covers flushing at the default threshold. That test was not run in this review.
+Package 49 startup and a bounded 86.52-second menu check passed on Xbox.
+No CPU/FPS improvement is claimed yet.
 
 ## Persistent caches already supported
 

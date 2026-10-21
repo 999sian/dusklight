@@ -7,12 +7,19 @@ Compatibility is still experimental until checked on the console.
 | --- | --- | --- |
 | Asset packs | Existing `.dusk` installer and resource overlays | Download/install in Xbox browser; texture memory use |
 | Luau scripts | UWP runtime starts and executes a script plus update callback on Xbox package 48 | Individual script APIs and mods; browser installation |
-| Bundled native mods | Build Cosmetics, Randomizer and Luau with the game's UWP toolchain/import library | DLL loading, hooks and features on Xbox |
+| Bundled native mods | Cosmetics, Randomizer and Luau all initialize on Xbox package 49 | Individual mod features and sustained gameplay |
 | Downloaded native mods | Rejected by the UWP loader until a supported LocalState loading route exists | Xbox API/CRT compatibility; packaging compatible DLLs with the app |
 | Mods using HTTP | Windows.Web.Http transport through existing Borealis services | Xbox browser/download and mod requests |
 | Mods requiring WebSocket | Backend remains unavailable | A separate UWP WebSocket port is required |
 
 ## Checks completed
+
+Package 49 now contains the embedded game symbol manifest. Xbox logs load
+239,095 symbols and report all three native mods initialized, **3/3 active**.
+No unresolved-hook warning appears in the captured startup log; the menu stays
+running at 30 seconds. This supersedes the package 48 missing-manifest limitation
+below. It does not prove all Cosmetic/Randomizer features or browser downloads.
+
 
 Package 48 fixes MSVC metadata retention: all three bundled UWP DLLs pass
 metadata validation on Xbox. Luau and Randomizer initialize; Cosmetics still
@@ -20,7 +27,9 @@ fails with unresolved named hooks because the package lacks its symbol manifest.
 A temporary Luau script logs both startup and first-update success and remains
 running for 30 seconds. The test package is removed and configuration restored.
 This does not establish Randomizer hook correctness or full gameplay behavior.
-Package 49 is testing symbol embedding in the signed package layout.
+Package 49 subsequently passed signed-layout symbol embedding and Xbox
+initialization checks as recorded above. A further launch remained running
+through 86.52 seconds at the menu; Play/controller behavior remains untested.
 
 
 Package 46 isolation narrows the startup exit to directory-backed mod discovery:
@@ -29,8 +38,8 @@ a plain folder containing only an asset manifest also reproduces it. Archived
 (which are safely rejected by the LocalState loading policy). This supersedes
 the earlier assumption that DLL loading itself had been isolated. Build 47
 (`39660091944`, source `b5be9f8`) tests lexical bundle-relative paths instead of
-physical filesystem resolution. Native loading and script activation remain
-unverified until a normal launch succeeds.
+physical filesystem resolution. Package 47 later passed the exact folder-only
+reproducer; packages 48/49 verified script/native initialization as recorded above.
 
 
 Windows HTTP workflow run `39606283522` passed all 22 tests, including live HTTPS
@@ -45,8 +54,9 @@ On Xbox package 42, with bundled native DLLs temporarily bypassed for isolation,
 the update service logged `Checked 3 installed mods for updates` on two launches.
 This confirms its HTTP request path on the console. Browser UI navigation and
 an in-app mod download/install have not yet been exercised. Each bundled native
-mod alone reproduces a startup exit; the package-loader correction is pending
-build/hardware verification. Temporary overrides were removed after testing.
+mod alone reproduced a startup exit in that earlier build; later isolation
+identified directory enumeration as the cause, fixed and verified in package 47.
+Temporary overrides were removed after testing.
 
 Hylian Shield 1.0.0 was also uploaded temporarily through Device Portal during
 the native-isolation test. The Xbox loader logged both discovery and activation,
@@ -75,7 +85,8 @@ For browser download testing, Hylian Shield 1.0.0 is a small asset-only example
 (499,508 bytes). Its published size/SHA-256 and archive manifest were checked
 locally; it contains no native libraries. The server supports byte ranges with
 a strong ETag, so the Windows HTTP workflow now uses it for the existing live
-resume/replacement test, which passed on Windows. Xbox installation remains pending.
+resume/replacement test, which passed on Windows. Xbox asset loading passed
+through Device Portal as recorded above; browser installation remains pending.
 
 ## Recovery detail
 
