@@ -25,13 +25,20 @@ jobs:
         with:
           arch: amd64
 
+      - name: Check out pinned UWP dependencies
+        uses: actions/checkout@v6
+        with:
+          repository: SternXD/uwp-dep
+          ref: ae39aa004ae127bd00f8262d28b401f8e4ed8728
+          path: build/uwp-dep
+
       - name: Configure game libraries
         run: |
           cmake -S . -B build/game -G Ninja `
             -DCMAKE_BUILD_TYPE=RelWithDebInfo `
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
             -DDUSK_UWP=ON -DDUSK_ENABLE_DISCORD=OFF `
-            -DAURORA_UWP_DEP_TAG=ae39aa004ae127bd00f8262d28b401f8e4ed8728
+            -DAURORA_UWP_DEP_SOURCE_DIR="$env:GITHUB_WORKSPACE/build/uwp-dep"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Compile game libraries
@@ -40,7 +47,8 @@ jobs:
       - name: Configure UWP package
         run: |
           cmake -S platforms/uwp -B build-uwp -G "Visual Studio 17 2022" -A x64 `
-            -DDUSK_DIR="$env:GITHUB_WORKSPACE/build/game"
+            -DDUSK_DIR="$env:GITHUB_WORKSPACE/build/game" `
+            -DFETCHCONTENT_SOURCE_DIR_UWPLIBS="$env:GITHUB_WORKSPACE/build/uwp-dep"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Create development signing certificate
