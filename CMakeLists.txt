@@ -168,6 +168,10 @@ if (DUSK_MOVIE_SUPPORT)
             -DWITH_TURBOJPEG=ON
             -DWITH_JAVA=OFF
         )
+        if (MSVC AND CMAKE_MSVC_RUNTIME_LIBRARY MATCHES "DLL")
+            # libjpeg-turbo otherwise overrides the inherited runtime with /MT.
+            list(APPEND _jpeg_cmake_args -DWITH_CRT_DLL=ON)
+        endif ()
         if (CMAKE_TOOLCHAIN_FILE)
             get_filename_component(_jpeg_toolchain_file "${CMAKE_TOOLCHAIN_FILE}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
             list(APPEND _jpeg_cmake_args -DCMAKE_TOOLCHAIN_FILE=${_jpeg_toolchain_file})

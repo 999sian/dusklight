@@ -4,6 +4,10 @@ The `Build Xbox UWP (experimental)` workflow uses a Windows 2022 cloud runner.
 No local Windows PC is required. Builds currently use the discontinued UWP
 1.1.1 source as a baseline; this is not a Dusklight 2.0.3 port yet.
 
+GitHub currently blocks runs on this fork due to the scale of Actions usage.
+Sign in as the repository owner and re-enable workflows from the Actions
+page before dispatching the build on `xbox-one-s-uwp`.
+
 The workflow compiles x64 game libraries with the DLL CRT, then builds and
 signs the existing UWP launcher. Both stages use the same pinned UWP
 dependency revision. The temporary signing key stays on the runner.
