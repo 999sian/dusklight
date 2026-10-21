@@ -48,8 +48,12 @@ experiments, rather than unvalidated default changes.
   corner, height, visibility and progress values. Removing the guards makes the
   regression fail. Rendered layout remains a hardware check.
 - Independent source review found no actionable correctness issue. Both Git
-  trees passed `git diff --check`. Windows CI now runs interpolation and HUD tests
-  before building the UWP application and its bundled native mods.
+  trees passed `git diff --check`. CI runs the standalone interpolation test on
+  Linux and the HUD test on Windows, alongside the complete UWP application and
+  bundled native-mod build. The standalone interpolation harness includes real
+  engine implementation files but intentionally omits the renderer; it relies
+  on Linux dead-section elimination. Attempting it with MSVC exposed full-engine
+  link dependencies, so Windows correctness is checked through the full app build.
 
 No game/settings/save/ISO files were modified for CPU testing. The full texture
 pack remains enabled in internal D: storage as described in the progress doc.

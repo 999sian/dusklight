@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
 project(interpolation_storage_tests LANGUAGES CXX)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "Run this isolated engine-storage test on Linux; the UWP job builds the full Windows engine.")
+endif()
 set(CMAKE_CXX_STANDARD 20)
 include(../../cmake/GameABIConfig.cmake)
 include(FetchContent)
@@ -21,17 +24,8 @@ enable_testing()
 add_executable(interpolation_storage_test interpolation_storage_test.cpp)
 target_link_libraries(interpolation_storage_test PRIVATE dusklight_game_headers absl::flat_hash_map fmt::fmt)
 # Eliminate unused engine paths; this test intentionally links no renderer/game runtime.
-if(MSVC)
-    target_compile_options(interpolation_storage_test PRIVATE /Zc:__cplusplus /O2 /Gy /Gw /UNDEBUG)
-    target_link_options(interpolation_storage_test PRIVATE /OPT:REF)
-else()
-    target_compile_options(interpolation_storage_test PRIVATE
-        -O2 -UNDEBUG -Wno-multichar -Wno-deprecated-declarations -Wno-invalid-offsetof
-        -ffunction-sections -fdata-sections)
-    if(APPLE)
-        target_link_options(interpolation_storage_test PRIVATE -Wl,-dead_strip)
-    else()
-        target_link_options(interpolation_storage_test PRIVATE -Wl,--gc-sections)
-    endif()
-endif()
+target_compile_options(interpolation_storage_test PRIVATE
+    -O2 -UNDEBUG -Wno-multichar -Wno-deprecated-declarations -Wno-invalid-offsetof
+    -ffunction-sections -fdata-sections)
+target_link_options(interpolation_storage_test PRIVATE -Wl,--gc-sections)
 add_test(NAME interpolation_storage COMMAND interpolation_storage_test)
