@@ -8,8 +8,35 @@ Device Portal again before continuing.
 Dusklight based on upstream **v2.0.3 builds successfully and installs on the
 Xbox One S**. Installed package **2.0.3.33** initializes D3D12, loads the
 European Twilight Princess ISO and renders the Dusklight startup menu.
-**Starting the game still freezes on a black screen at 0 FPS. The upgrade is
-not yet playable or fully verified.**
+**Package 2.0.3.33 froze on a black screen at 0 FPS when starting the game;
+that freeze is now fixed (2.0.3.37, see below). Full gameplay is not yet verified.**
+
+**Root cause found (afternoon session).** The freeze is a deadlock in
+uwp-dep's SDL3 3.4.16, not in the game. Build 2.0.3.36 added main-loop probes
+and a 30-second watchdog that fail-fasts so WER writes a dump; the dump
+(`/tmp/dusklight-36-hang.dmp`, thread report `/tmp/dusklight-36-threads.txt`)
+shows the game thread in `mDoAud_Execute → dusk::audio::Initialize →
+SDL_OpenAudioDeviceStream`, waiting on SDL's WASAPI management thread. That
+thread is waiting on itself: `WASAPI_ActivateDevice → WASAPI_PrepDevice →
+WASAPI_ProxyToManagementThread` queued a task to its own queue because
+`ManagementThread->threadid` reads **0** in the dump. SDL 3.4.10 moved thread-ID
+assignment from `SDL_RunThread` into each backend's `SDL_SYS_CreateThread`;
+SternXD/SDL3-uwp builds the stdcpp backend, which upstream deleted with WinRT,
+so it was never updated (still unfixed on `uwp-3.4.18`). The 1.1.1 baseline
+shipped an older SDL3, which is why it worked.
+
+Fix: `platforms/uwp/patches/sdl3-stdcpp-thread-id.patch`, applied in CI to the
+exact shipped source (SternXD/SDL3-uwp `ddd5d4f`) and copied over uwp-dep's
+`SDL3.dll`/`SDL3.lib` before configuration. The probe was removed in the
+same commit (`af9cb1b`, run 39592628007). **Verified on hardware:** package
+2.0.3.37 booted straight into the game (skip-menu path), ran past game frame
+2700 at ~30% CPU with no crash dump, and rendered the intro (Hyrule Castle and
+field flyover) at 88–119 FPS while compiling shaders
+(`xbox-v2-37-skip-*.png` in the diagnostics folder). On that path a
+"No device assigned: Configure Port 1" toast showed; controller input, audio
+output, saves and sustained play are still unverified. Config was restored
+afterwards (startup menu enabled); saves were backed up first to
+`before-v2-20261021-115742`.
 
 The original ISO and European save-card folder survived the in-place upgrade.
 Settings and saves were backed up locally before installation. Do not uninstall
