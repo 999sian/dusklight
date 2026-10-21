@@ -29,6 +29,13 @@ an in-app mod download/install have not yet been exercised. Each bundled native
 mod alone reproduces a startup exit; the package-loader correction is pending
 build/hardware verification. Temporary overrides were removed after testing.
 
+Hylian Shield 1.0.0 was also uploaded temporarily through Device Portal during
+the native-isolation test. The Xbox loader logged both discovery and activation,
+and the menu stayed running for 30 seconds. This checks the actual `.dusk`
+asset-package loading path, not the shield's appearance in gameplay or the
+browser's installer UI. Its test file and all overrides were removed, and the
+original configuration restored afterward.
+
 The catalog's Windows x64 query returned 68 entries on 21 October 2026:
 22 without native code and 46 with native code. These are published platform
 claims, not Xbox compatibility results.

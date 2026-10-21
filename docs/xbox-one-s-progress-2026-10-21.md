@@ -5,7 +5,15 @@ Device Portal again before continuing.
 
 ## Optimization and mod support work
 
-Latest hardware check: package **2.0.3.42** built successfully in run
+Latest retry: package **2.0.3.45** passed build `39612531442`, package inspection
+and in-place installation, retaining all five backed-up files unchanged. Normal
+startup still exits. The package-loader change alone did not fix it. Added a
+few flushed startup checkpoints around native runtime preparation, DLL opening,
+metadata validation and activation to locate the next failure; steady-state
+debug messages remain buffered. Device Portal again retained no usable dump.
+Newest backup: `before-v2-20261021-151540` under the diagnostics directory.
+
+Earlier hardware isolation: package **2.0.3.42** built successfully in run
 `39605326169` and was installed in place. All five backed-up settings/save
 files matched their previous SHA-256 after installation; the ISO and both
 caches remained present. The normal launch exits during native-mod startup.
@@ -17,8 +25,8 @@ restored after each test. This isolates a shared native-loading/init problem;
 Device Portal did not retain a usable crash dump. A change to use the supported
 package-relative `LoadPackagedLibrary` route for bundled UWP DLLs is awaiting
 a new Windows build and hardware verification. Downloaded native DLLs are now
-rejected until a supported Xbox loading route is established. The current retry
-is run `39611566818`; it supersedes canceled run `39611025870`.
+rejected until a supported Xbox loading route is established. Runs `39611566818`
+and `39611025870` were canceled and superseded by 45.
 Do not describe 42 as a working replacement for 37.
 
 Latest backup before installing 42:

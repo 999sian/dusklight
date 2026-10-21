@@ -26,6 +26,7 @@
 #include "dusk/utilities.hpp"
 
 #include <borealis/io.hpp>
+#include <borealis/log.hpp>
 #include <borealis/update.hpp>
 #include <fmt/format.h>
 
@@ -208,6 +209,7 @@ LoadedMod* ModLoader::try_load_mod(const fs::path& modPath, bool fromDir, uint32
 
 bool ModLoader::activate_mod(LoadedMod& mod) {
     log::write(mod.metadata.id, LOG_LEVEL_INFO, "activating mod");
+    borealis::log::flush();
     mod.active = true;
 
     // Asset-only mods have no lifecycle beyond their overlay files.
@@ -262,7 +264,8 @@ bool ModLoader::activate_mod(LoadedMod& mod) {
     }
 
     const char* initializeName = mod.native ? "mod_initialize" : "runtime activate";
-    log::write(mod.metadata.id, LOG_LEVEL_TRACE, "calling {}", initializeName);
+    log::write(mod.metadata.id, LOG_LEVEL_INFO, "calling {}", initializeName);
+    borealis::log::flush();
     try {
         ModError error = MOD_ERROR_INIT;
         const auto result = mod.native ?
@@ -271,7 +274,8 @@ bool ModLoader::activate_mod(LoadedMod& mod) {
                                     mod.runtime->providerContext, mod.context.get(), &error);
         if (result == MOD_OK && !mod.loadFailed) {
             mod.initialized = true;
-            log::write(mod.metadata.id, LOG_LEVEL_TRACE, "{} succeeded", initializeName);
+            log::write(mod.metadata.id, LOG_LEVEL_INFO, "{} succeeded", initializeName);
+            borealis::log::flush();
         } else if (result != MOD_OK && !mod.loadFailed) {
             fail_mod(mod, result, lifecycle_error_message(initializeName, result, error));
         }

@@ -9,6 +9,7 @@
 #include "dusk/utilities.hpp"
 
 #include <borealis/io.hpp>
+#include <borealis/log.hpp>
 #include <fmt/format.h>
 
 #include <algorithm>
@@ -391,6 +392,8 @@ void ModLoader::load_native(
         return;
     }
 
+    log::write(mod.metadata.id, LOG_LEVEL_INFO, "Preparing native runtime");
+    borealis::log::flush();
     const fs::path cacheDir = m_cacheDir / mod.metadata.id;
     const fs::path scratchDir = cacheDir / "data";
     std::error_code ec;
@@ -486,6 +489,9 @@ void ModLoader::load_native(
     }
 
     auto nativeMod = std::make_unique<NativeMod>();
+    log::write(mod.metadata.id, LOG_LEVEL_INFO, "Opening native library {}",
+        data::abbreviated_path_string(libPath));
+    borealis::log::flush();
     try {
         nativeMod->handle = std::make_unique<loader::NativeModule>(libPath);
     } catch (const std::runtime_error& e) {
@@ -493,6 +499,8 @@ void ModLoader::load_native(
             data::abbreviated_path_string(libPath), e.what());
         return;
     }
+    log::write(mod.metadata.id, LOG_LEVEL_INFO, "Native library opened");
+    borealis::log::flush();
 
     nativeMod->meta = nativeMod->handle->LookupSymbol<const ModMeta*>("mod_meta");
     nativeMod->contextSymbol = nativeMod->handle->LookupSymbol<ModContext**>("mod_ctx");
@@ -513,6 +521,8 @@ void ModLoader::load_native(
     if (!parse_meta(*nativeMod, mod)) {
         return;
     }
+    log::write(mod.metadata.id, LOG_LEVEL_INFO, "Native metadata verified");
+    borealis::log::flush();
 
     if (nativeMod->contextSymbol == nullptr) {
         log::write(mod.metadata.id, LOG_LEVEL_ERROR, "missing required mod_ctx export");
