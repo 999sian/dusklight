@@ -41,8 +41,9 @@ Shader/GPU caches and the ISO were not removed. Pending builds must pass package
 inspection and an in-place console test before recording an improvement.
 
 The focused Windows check now passes: run
-[39604721297](https://github.com/999sian/dusklight/actions/runs/39604721297)
-passed 21 HTTP tests, including real catalog GET/HEAD requests, and the
+[39606283522](https://github.com/999sian/dusklight/actions/runs/39606283522)
+passed all 22 HTTP tests, including real catalog GET/HEAD requests, a real asset
+mod's download resume/stale-partial replacement/completion handling, and the
 Randomizer endian check. The HTTP backend keeps its COM apartment alive for
 the worker lifetime and registers each completion handler only once. The full
 Xbox package build is

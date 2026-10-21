@@ -14,10 +14,11 @@ Compatibility is still experimental until checked on the console.
 
 ## Checks completed
 
-Windows HTTP workflow run `39604721297` passed 21 tests, including live HTTPS
+Windows HTTP workflow run `39606283522` passed all 22 tests, including live HTTPS
 GET and HEAD requests to the official mod catalog, request cancellation and
 expired deadlines, plaintext rejection, download validation and file handling.
-The optional live range-resume integration test was not enabled. The Randomizer
+The live download test also passed byte-range resume, stale-validator replacement
+and completion handling against Hylian Shield 1.0.0. The Randomizer
 endian self-check passed under MSVC with deprecations treated as errors, and
 under GCC locally. This does not prove Xbox runtime behavior.
 
@@ -36,3 +37,18 @@ Some such mods will need an Xbox-compatible build rather than a loader change.
 Keep the game's ABI/service validation and download integrity checks. Do not
 replace unsupported APIs with silent success stubs to claim compatibility.
 Preserve settings, saves, ISO and caches during in-place app updates.
+
+For browser download testing, Hylian Shield 1.0.0 is a small asset-only example
+(499,508 bytes). Its published size/SHA-256 and archive manifest were checked
+locally; it contains no native libraries. The server supports byte ranges with
+a strong ETag, so the Windows HTTP workflow now uses it for the existing live
+resume/replacement test, which passed on Windows. Xbox installation remains pending.
+
+## Recovery detail
+
+The loader opens native DLLs during discovery to read their service metadata,
+before applying the enabled setting. Disabling a mod therefore does not prevent
+its DLL or static initializers from loading. For a startup failure caused by a
+downloaded native mod, stop the app and move that mod out of its search folder
+while retaining a backup. Bundled package files are read-only and would require
+a corrected in-place package. Do not uninstall or clear LocalState for recovery.
