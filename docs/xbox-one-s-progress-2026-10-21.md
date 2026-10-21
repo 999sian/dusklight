@@ -5,6 +5,14 @@ Device Portal again before continuing.
 
 ## Optimization and mod support work
 
+Dark Link follow-up: `Play as Dark Link` 1.0.0 is now installed through Device
+Portal and activates successfully on package 49 (**4/4 mods active**, 30-second
+startup check). Existing config/save values were preserved against backup
+`before-v2-20261021-230955`. The browser downloaded the correct complete package
+but final installation reportedly failed with a permission error; its exact
+text/API is unknown and no browser fix is claimed. See the Dark Link section
+in `xbox-one-s-mod-compatibility.md` for evidence and remaining checks.
+
 **Current installed package: 2.0.3.49**, code source `9331db1`, successful run
 `39666098488`. The signed MSIX contains a nonzero symbol descriptor and valid
 SYMGEN header; all three mod DLLs contain one metadata header. Installed in

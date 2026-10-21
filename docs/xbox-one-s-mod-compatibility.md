@@ -5,12 +5,40 @@ Compatibility is still experimental until checked on the console.
 
 | Mod type | Current approach | Verification still needed |
 | --- | --- | --- |
-| Asset packs | Existing `.dusk` installer and resource overlays | Download/install in Xbox browser; texture memory use |
+| Asset packs and texture/model mods | Dark Link 1.0.0 activates via Luau after direct Device Portal installation | Browser installation permission failure; in-game appearance and texture memory use |
 | Luau scripts | UWP runtime starts and executes a script plus update callback on Xbox package 48 | Individual script APIs and mods; browser installation |
 | Bundled native mods | Cosmetics, Randomizer and Luau all initialize on Xbox package 49 | Individual mod features and sustained gameplay |
 | Downloaded native mods | Rejected by the UWP loader until a supported LocalState loading route exists | Xbox API/CRT compatibility; packaging compatible DLLs with the app |
 | Mods using HTTP | Windows.Web.Http transport through existing Borealis services | Xbox browser/download and mod requests |
 | Mods requiring WebSocket | Backend remains unavailable | A separate UWP WebSocket port is required |
+
+## Dark Link texture/model package
+
+`Play as Dark Link` 1.0.0 (`com.loadingerror.dink`, LoadingError) is now installed
+on Xbox package 2.0.3.49 through Device Portal. This is the appearance mod, not
+`hopex.dark_link`, the separate native-code boss mod. The official package has
+no native DLL and uses `dev.twilitrealm.luau@1.0` for texture/model controls.
+
+The browser attempt left an 8,293,385-byte staged package. Its SHA-256 matches
+the official catalog: `ea6817e57facc84230c4e1fa970effb0df58ecb5e296ac4f27124331c18c4bf9`.
+That verifies download/staging integrity; the user reports a permission error
+at installation but declined a retry/full-text capture. The exact failing API
+is not established. Review found physical path resolution and atomic file
+replacement in the remaining install path; neither is proven responsible.
+Do not weaken staging containment or file replacement guarantees on that basis.
+
+After a fresh backup (`before-v2-20261021-230955`), the exact verified package
+was copied to `mods/com.loadingerror.dink.dusk` without overwriting another mod.
+Xbox logs report `runtime activate succeeded` for the mod and **4/4 mods active**.
+The process remained running through the 30-second startup check and rendered
+the menu. Existing config values and achievements/UI/save files matched the
+backup after launch. The mod remains installed; the original staged file is
+retained as evidence. No reinstall/uninstall or cache clearing was performed.
+
+Evidence: `v49-dark-link-installed.log` and `v49-dark-link-installed.png` in the
+local Xbox diagnostics folder. Initialization does not establish correct texture
+appearance, model swaps, HD-texture toggles or sustained gameplay. The browser
+installation permission failure remains unresolved; direct installation bypasses it.
 
 ## Checks completed
 
