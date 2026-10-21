@@ -19,6 +19,12 @@ borealis_detect_version()
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 project(dusklight LANGUAGES C CXX VERSION ${BOREALIS_APP_VERSION})
 
+if (DUSK_UWP AND MSVC)
+    # Preserve fixed-width CARD strings and legacy unsigned arithmetic under UWP's /sdl checks.
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+    add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/wd4146>)
+endif ()
+
 if (APPLE)
     enable_language(OBJC OBJCXX)
 endif ()
