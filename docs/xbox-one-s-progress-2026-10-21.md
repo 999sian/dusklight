@@ -5,6 +5,17 @@ Device Portal again before continuing.
 
 ## Optimization and mod support work
 
+Follow-up verification on 47: the exact folder-only manifest test that exited
+on 46 now logs discovery and activation of `com.test.disk`; all four temporary
+asset-only mods are active and the process remains running at 30 seconds.
+Temporary packages/manifests were removed and the original config restored.
+Evidence: `v47-asset-directory-isolation.log` and screenshot in diagnostics.
+
+The early MSVC metadata test passed in run `39664733587` (source `51e36de`),
+which is now building package 48. This validates metadata retention/import-slot
+binding in a small Windows DLL, not yet the three full UWP mods on Xbox.
+
+
 **Startup crash fixed in package 2.0.3.47**, source `b5be9f8`, successful run
 `39660091944`. Installed in place with all five save/settings hashes unchanged.
 Normal startup now reaches the menu and remains running beyond the initial
