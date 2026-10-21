@@ -47,15 +47,15 @@ jobs:
             -DAURORA_UWP_DEP_SOURCE_DIR="$env:GITHUB_WORKSPACE/build/uwp-dep"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
-      - name: Compile game libraries
-        run: cmake --build build/game --parallel 4
-
       - name: Configure UWP package
         run: |
           cmake -S platforms/uwp -B build-uwp -G "Visual Studio 17 2022" -A x64 `
             -DDUSK_DIR="$env:GITHUB_WORKSPACE/build/game" `
             -DFETCHCONTENT_SOURCE_DIR_UWPLIBS="$env:GITHUB_WORKSPACE/build/uwp-dep"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Compile game libraries
+        run: cmake --build build/game --parallel 4
 
       - name: Create development signing certificate
         run: |
