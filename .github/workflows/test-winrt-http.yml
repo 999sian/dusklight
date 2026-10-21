@@ -45,6 +45,7 @@ jobs:
         env:
           BOREALIS_HTTP_GET_TEST_URL: https://twilitrealm.dev/api/v1/games/dusklight/mods?platform=windows-amd64
           BOREALIS_HTTP_METHOD_TEST_URL: https://twilitrealm.dev/api/v1/games/dusklight/mods?platform=windows-amd64
+          BOREALIS_HTTP_RESUME_TEST_URL: https://twilitrealm.dev/download/dusklight/com.bytheeightdivines.hylianshield/1.0.0
         run: |
           $test = 'build-http/tests/Release/borealis_http_test.exe'
           $dll = Get-ChildItem build-http -Recurse -Filter SDL3.dll | Select-Object -First 1
