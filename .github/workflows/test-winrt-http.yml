@@ -2,6 +2,11 @@ name: Test UWP HTTP transport
 
 on:
   workflow_dispatch:
+  push:
+    branches: [xbox-one-s-uwp-v2.0.3]
+    paths:
+      - extern/borealis
+      - .github/workflows/test-winrt-http.yml
 
 permissions:
   contents: read
@@ -42,4 +47,11 @@ jobs:
           $dll = Get-ChildItem build-http -Recurse -Filter SDL3.dll | Select-Object -First 1
           if ($dll) { Copy-Item $dll.FullName (Split-Path $test) -Force }
           & $test
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Check Randomizer endian conversion
+        run: |
+          cl /nologo /std:c++20 /EHsc /we4996 /Fe:endian-test.exe `
+            mods/randomizer/generator/test/endian_test.cpp mods/randomizer/generator/utility/endian.cpp
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./endian-test.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
