@@ -24,12 +24,14 @@ The development certificate changes between runs, so repeated installations
 may need certificate handling in Device Portal. Do not uninstall an existing
 installation without backing up its LocalState data.
 
-Xbox One S support is unverified. A successful cloud build establishes only
-that the package compiles; console startup, rendering, controller input,
-save/load and performance require hardware tests.
+Xbox One S startup, the settings UI, ISO loading and opening-cutscene rendering
+were verified remotely on 2026-10-21 with package 1.1.1.25 (run 39568219529,
+source fb65c91). Native internal resolution and frame interpolation disabled
+were used for this test. Controller input, audio, save/load, sustained performance
+and a full playthrough remain unverified.
 
-Next: establish the baseline build, adapt the UWP integration and Aurora
-dependencies to upstream v2.0.3, then test on an Xbox One S.
+Next: recheck the latest stable upstream version, adapt the UWP integration
+and Aurora dependencies to that release, then repeat the Xbox One S tests.
 
 ## Xbox startup investigation
 
@@ -37,8 +39,10 @@ The first hardware test reaches Aurora, then crashes with access violation
 `0xc0000005` in the console D3D12 driver (`umd12ddi.dll`). The captured stack
 contains Dawn’s `ID3D12Device::CreatePlacedResource` path. The pinned Aurora fork
 enables Dawn’s `disable_resource_suballocation` toggle for UWP to test committed
-resource allocation instead. This workaround still needs a console retest; it
-may increase GPU memory use. Original logs and crash dump are retained locally.
+resource allocation instead. The console retest passed graphics initialization and rendered the opening
+cutscene without a new crash dump. Committed allocations may increase GPU
+memory use; the process used about 519 MiB during the initial test. Original
+logs, screenshots and crash dump are retained locally.
 
 Each workflow run assigns its run number as the fourth package version component.
 This avoids replacing different development binaries under the same package
