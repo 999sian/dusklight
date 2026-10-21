@@ -48,6 +48,15 @@ jobs:
             -DAURORA_UWP_DEP_SOURCE_DIR="$env:GITHUB_WORKSPACE/build/uwp-dep"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
+      - name: Assign a unique development package revision
+        run: |
+          $revision = [int]$env:GITHUB_RUN_NUMBER
+          if ($revision -gt 65535) { throw "Package revision exceeds UWP limit" }
+          $path = Join-Path $env:GITHUB_WORKSPACE "platforms/uwp/Package.appxmanifest"
+          [xml]$manifest = Get-Content $path
+          $manifest.Package.Identity.Version = "1.1.1.$revision"
+          $manifest.Save($path)
+
       - name: Configure UWP package
         run: |
           cmake -S platforms/uwp -B build-uwp -G "Visual Studio 17 2022" -A x64 `

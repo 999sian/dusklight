@@ -39,3 +39,7 @@ contains Dawn’s `ID3D12Device::CreatePlacedResource` path. The pinned Aurora f
 enables Dawn’s `disable_resource_suballocation` toggle for UWP to test committed
 resource allocation instead. This workaround still needs a console retest; it
 may increase GPU memory use. Original logs and crash dump are retained locally.
+
+Each workflow run assigns its run number as the fourth package version component.
+This avoids replacing different development binaries under the same package
+identity/version, which produced a broken registration during console testing.
