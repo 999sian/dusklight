@@ -40,11 +40,22 @@ Newest settings/save backup:
 Shader/GPU caches and the ISO were not removed. Pending builds must pass package
 inspection and an in-place console test before recording an improvement.
 
+The focused Windows check now passes: run
+[39604721297](https://github.com/999sian/dusklight/actions/runs/39604721297)
+passed 21 HTTP tests, including real catalog GET/HEAD requests, and the
+Randomizer endian check. The HTTP backend keeps its COM apartment alive for
+the worker lifetime and registers each completion handler only once. The full
+Xbox package build is
+[39605326169](https://github.com/999sian/dusklight/actions/runs/39605326169).
+It must pass before deployment. Read [optimization verification](xbox-one-s-optimization.md)
+and [mod compatibility checks](xbox-one-s-mod-compatibility.md) for measured
+facts and remaining limits.
+
 ## Current result
 
 Dusklight based on upstream **v2.0.3 builds successfully and installs on the
-Xbox One S**. Installed package **2.0.3.33** initializes D3D12, loads the
-European Twilight Princess ISO and renders the Dusklight startup menu.
+Xbox One S**. Installed package **2.0.3.37** initializes D3D12, loads the
+European Twilight Princess ISO and renders the startup menu and game intro.
 **Package 2.0.3.33 froze on a black screen at 0 FPS when starting the game;
 that freeze is now fixed (2.0.3.37, see below). Full gameplay is not yet verified.**
 
@@ -98,8 +109,8 @@ the app: uninstalling can remove its data.
 | Local checkout | `/home/sian/Documents/dusklight-uwp` |
 | Active branch | `xbox-one-s-uwp-v2.0.3` |
 | Upstream v2.0.3 base | `40457c6adb381928e4b5fef6ed459ed291edd5e2` |
-| Installed build source | `d4d202cf5ea685fff7deb6e890968a52b2224726` |
-| Diagnostic source committed and pushed | `1acb720` |
+| Installed build source | `af9cb1b6afb513899fef8ecc35f528a25a353974` |
+| Current optimization/mod build source | `b64be47` (CI pending) |
 | Aurora fork | https://github.com/999sian/aurora — branch `xbox-one-s-v2.0.3`, pin `13baa5a` |
 | Borealis fork | https://github.com/999sian/borealis — branch `xbox-one-s-v2.0.3`, pin `c742129` |
 | Pinned binary dependencies | SternXD/uwp-dep `810cdcb672383045a8b03d1d55bb535352d7d46f` |
