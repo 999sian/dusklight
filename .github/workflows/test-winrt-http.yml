@@ -1,0 +1,45 @@
+name: Test UWP HTTP transport
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  http:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+      - name: Configure Windows HTTP tests
+        run: |
+          cmake -S extern/borealis -B build-http -G "Visual Studio 17 2022" -A x64 `
+            -DBOREALIS_HTTP_BACKEND=winrt -DBOREALIS_BUILD_TESTS=ON `
+            -DBOREALIS_AURORA_DIR="$env:GITHUB_WORKSPACE/extern/aurora" `
+            -DAURORA_SDL3_PROVIDER=package -DAURORA_SDL3_LINKAGE=static `
+            -DBOREALIS_ENABLE_CLI=OFF -DBOREALIS_ENABLE_CRASH=OFF `
+            -DBOREALIS_ENABLE_DATA=OFF -DBOREALIS_ENABLE_DISC=OFF `
+            -DBOREALIS_ENABLE_DISCORD=OFF -DBOREALIS_ENABLE_FILE_SELECT=OFF `
+            -DBOREALIS_ENABLE_NET=OFF -DBOREALIS_ENABLE_UPDATE=OFF `
+            -DBOREALIS_ENABLE_WEBSOCKET=OFF -Dgtest_force_shared_crt=ON
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build HTTP tests
+        run: |
+          cmake --build build-http --config Release --parallel 4 --target borealis_http_test
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Run HTTP tests
+        run: |
+          $test = 'build-http/tests/Release/borealis_http_test.exe'
+          $dll = Get-ChildItem build-http -Recurse -Filter SDL3.dll | Select-Object -First 1
+          if ($dll) { Copy-Item $dll.FullName (Split-Path $test) -Force }
+          & $test
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
