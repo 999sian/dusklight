@@ -5,6 +5,23 @@ Device Portal again before continuing.
 
 ## Optimization and mod support work
 
+**Startup crash fixed in package 2.0.3.47**, source `b5be9f8`, successful run
+`39660091944`. Installed in place with all five save/settings hashes unchanged.
+Normal startup now reaches the menu and remains running beyond the initial
+30-second check without any temporary manifest overrides. Screenshot:
+`v47-first-launch.png`; full checkpoint log: `v47-startup.log`. All three
+packaged DLLs successfully open. The folder enumeration change removes the
+startup exit before native loading.
+
+Native mods still fail validation: each logs `expected 1 metadata header record,
+found 0`, so the log reports 0/3 active. PE inspection confirms Luau's `modmeta`
+section is only 16 zero bytes (the two sentinels); Cosmetics retains hook records
+but no header. The next change retains unreferenced metadata with MSVC compiler/
+linker settings and adds a small standalone DLL-loading regression check before
+the expensive full build. It must pass before claiming native mod support.
+The Xbox was stopped after the bounded normal-startup test.
+
+
 Package **2.0.3.46** passed run `39617057857` and in-place deployment; all
 five save/settings hashes still matched backup `before-v2-20261021-200913`.
 Normal launch still exits before the first native-runtime checkpoint.

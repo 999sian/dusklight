@@ -188,6 +188,12 @@ function(add_mod target_name)
         target_compile_features(${target_name} PRIVATE cxx_std_20)
         target_link_libraries(${target_name} PRIVATE dusklight_mod_api)
 
+        if (MSVC)
+            # Metadata records are discovered by section bounds rather than C++ references.
+            target_compile_options(${target_name} PRIVATE /Zc:inline-)
+            target_link_options(${target_name} PRIVATE /OPT:NOREF)
+        endif ()
+
         if (APPLE)
             set(_mod_exports "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/ModExports.exp")
             target_link_options(${target_name} PRIVATE
