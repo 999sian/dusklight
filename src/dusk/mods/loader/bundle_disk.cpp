@@ -32,7 +32,8 @@ std::vector<std::string> ModBundleDisk::getFileNames() {
         }
 
         const auto& path = it->path();
-        const auto relPath = fs::relative(path, root_path);
+        // Iterator paths already include root_path; avoid physical-path resolution on Xbox.
+        const auto relPath = path.lexically_relative(root_path);
         auto string = borealis::io::fs_path_to_string(relPath);
         if constexpr (fs::path::preferred_separator != '/') {
             // Convert \ to / on Windows

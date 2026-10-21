@@ -540,6 +540,8 @@ void ModLoader::load_native(
 }
 
 bool ModLoader::load_native_if_present(LoadedMod& mod) {
+    log::write(mod.metadata.id, LOG_LEVEL_INFO, "Inspecting native bundle");
+    borealis::log::flush();
     const auto result = locate_native_runtime(*mod.bundle);
     if (const auto* failure = std::get_if<NativeLocateFailure>(&result)) {
         mod.nativeStatus = failure->status;

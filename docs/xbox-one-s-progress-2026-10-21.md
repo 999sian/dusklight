@@ -5,6 +5,27 @@ Device Portal again before continuing.
 
 ## Optimization and mod support work
 
+Package **2.0.3.46** passed run `39617057857` and in-place deployment; all
+five save/settings hashes still matched backup `before-v2-20261021-200913`.
+Normal launch still exits before the first native-runtime checkpoint.
+Hardware isolation now narrows the failure to **directory-backed mod scanning**:
+all three asset-only ZIP overrides remain stable; ZIP overrides containing the
+original native DLLs also remain stable and log the expected unsupported
+LocalState DLL rejection; adding one directory-backed asset-only mod containing
+only `mod.json` reproduces the exit. No DLL is needed to trigger this failure.
+All temporary manifests/packages were removed and the original config restored.
+An empty `mods/temporary-disk-isolation` folder remains ignored by discovery.
+Evidence: `v46-startup.log`, `v46-native-zip-isolation.log` and
+`v46-asset-directory-isolation.log` in the diagnostics directory.
+
+Next candidate replaces physical `fs::relative` resolution in directory bundle
+enumeration with `path.lexically_relative(root_path)`. The iterator already
+provides paths prefixed with the root. A local assert test against the actual
+bundle implementation fails before and passes after the change for linked
+resource names, listing/readability and file sizes. Hardware confirmation is
+still required; a flushed pre-enumeration checkpoint was also added.
+
+
 Latest retry: package **2.0.3.45** passed build `39612531442`, package inspection
 and in-place installation, retaining all five backed-up files unchanged. Normal
 startup still exits. The package-loader change alone did not fix it. Added a
