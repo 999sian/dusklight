@@ -57,7 +57,7 @@ JKRArchive* JKRArchive::mount(s32 entryNum, JKRArchive::EMountMode mountMode, JK
     }
     int alignment = mountDirection == MOUNT_DIRECTION_HEAD ? 4 : -4;
 
-    JKRArchive* newArchive;
+    JKRArchive* newArchive = nullptr;
     switch (mountMode) {
     case JKRArchive::MOUNT_MEM:
         newArchive = JKR_NEW_ARGS (heap, alignment) JKRMemArchive(entryNum, mountDirection);

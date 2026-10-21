@@ -50,7 +50,7 @@ bool JASHeap::alloc(JASHeap* mother, u32 param_1) {
     u8* r29 = mother->mBase;
     bool local_43 = false;
     JASHeap* local_30 = NULL;
-    void* local_34;
+    void* local_34 = nullptr;
     JSUTreeIterator<JASHeap> it;
     for (it = mother->mTree.getFirstChild(); it != mother->mTree.getEndChild(); it++) {
         if (r29 >= mother->mBase + local_2c) {

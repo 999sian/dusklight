@@ -399,9 +399,6 @@ int JHIMccBufWriter::write(void* pBuffer, u32 size) {
     u32 var_r27;
     u32 var_r28;
 
-    // Probably fake match
-    var_r28 = var_r28;
-
     u32 var_r29 = setDataToBuf(pBuffer, size);
     if (mBeginPos == field_0xc) {
         var_r27 = field_0x1c + field_0xc;

@@ -540,7 +540,7 @@ s32 J2DPrint::getNumberS32(const u8** ppu8String, s32 defaultValue, s32 errorVal
     (*ppu8String)++;
 
     s32 number = 0;
-    char* pEnd;
+    char* pEnd = (char*)*ppu8String;
     if (base == 10) {
         number = strtol((char*)*ppu8String, &pEnd, base);
     } else if (base == 16) {
@@ -579,7 +579,7 @@ f32 J2DPrint::getNumberF32(const u8** ppu8String, f32 defaultValue, f32 errorVal
     (*ppu8String)++;
 
     s32 number = 0;
-    char* pEnd;
+    char* pEnd = (char*)*ppu8String;
     if (base == 10) {
         number = strtol((char*)*ppu8String, &pEnd, base);
     } else if (base == 16) {
