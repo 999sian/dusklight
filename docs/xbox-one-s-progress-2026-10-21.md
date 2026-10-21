@@ -5,6 +5,29 @@ Device Portal again before continuing.
 
 ## Optimization and mod support work
 
+Luau script execution is now verified on Xbox package 48: a temporary `.dusk`
+using runtime `dev.twilitrealm.luau@1.0` logs success from both its main script
+and its first `host.on_update` callback. The process remains running for the
+30-second test. The test package was removed and config restored afterward.
+Evidence: `v48-luau-script-test.log`. This verifies script activation/callbacks,
+not every Luau service or the browser installer UI.
+
+
+Package **2.0.3.48** passed run `39664733587`, in-place installation and all
+five prelaunch settings/save hashes. Static inspection confirms one header and
+8/6/15 imports in Luau/Cosmetics/Randomizer respectively. On Xbox all three
+DLLs open and pass metadata validation. Luau and Randomizer initialize and the
+game stays running at 30 seconds; Cosmetics initialization returns unavailable.
+Logs explain the remaining hook failures: no embedded symbol manifest.
+Runtime reports **2/3 mods active**, which does not establish that Randomizer's
+unresolved hooks work. Evidence: `v48-startup.log` and `v48-first-launch.png`.
+
+Run `39666098488` builds package 49 with the symbol-layout packaging correction.
+GitHub generated duplicate push run `39666098882` (package 50), canceled early;
+keep 49. Latest source is `9331db1`. Package 49 still needs full build, signed
+archive inspection and a console launch before recording hook support.
+
+
 Also confirmed a packaging issue in 47: its executable contains `.symdbh` with
 zero RVA/size and no `.symdb`, matching the runtime's unavailable symbol-manifest
 message. Re-running the pinned SHA-256-verified symgen 1.3.6 against the exact

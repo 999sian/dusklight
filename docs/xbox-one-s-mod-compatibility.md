@@ -6,13 +6,22 @@ Compatibility is still experimental until checked on the console.
 | Mod type | Current approach | Verification still needed |
 | --- | --- | --- |
 | Asset packs | Existing `.dusk` installer and resource overlays | Download/install in Xbox browser; texture memory use |
-| Luau scripts | Bundle the Luau runtime compiled for UWP | Script activation on Xbox |
+| Luau scripts | UWP runtime starts and executes a script plus update callback on Xbox package 48 | Individual script APIs and mods; browser installation |
 | Bundled native mods | Build Cosmetics, Randomizer and Luau with the game's UWP toolchain/import library | DLL loading, hooks and features on Xbox |
 | Downloaded native mods | Rejected by the UWP loader until a supported LocalState loading route exists | Xbox API/CRT compatibility; packaging compatible DLLs with the app |
 | Mods using HTTP | Windows.Web.Http transport through existing Borealis services | Xbox browser/download and mod requests |
 | Mods requiring WebSocket | Backend remains unavailable | A separate UWP WebSocket port is required |
 
 ## Checks completed
+
+Package 48 fixes MSVC metadata retention: all three bundled UWP DLLs pass
+metadata validation on Xbox. Luau and Randomizer initialize; Cosmetics still
+fails with unresolved named hooks because the package lacks its symbol manifest.
+A temporary Luau script logs both startup and first-update success and remains
+running for 30 seconds. The test package is removed and configuration restored.
+This does not establish Randomizer hook correctness or full gameplay behavior.
+Package 49 is testing symbol embedding in the signed package layout.
+
 
 Package 46 isolation narrows the startup exit to directory-backed mod discovery:
 a plain folder containing only an asset manifest also reproduces it. Archived
