@@ -20,7 +20,7 @@ struct StageRequest {
 };
 extern StageRequest StageRequested;
 
-#if defined(__ANDROID__) || (defined(TARGET_OS_IOS) && TARGET_OS_IOS) ||                           \
+#if defined(AURORA_WINDOWS_STORE) || defined(__ANDROID__) || (defined(TARGET_OS_IOS) && TARGET_OS_IOS) ||                           \
     (defined(TARGET_OS_TV) && TARGET_OS_TV)
 inline constexpr bool SupportsProcessRestart = false;
 #else

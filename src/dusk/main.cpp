@@ -1,4 +1,4 @@
-#if _WIN32
+#if _WIN32 && !defined(AURORA_WINDOWS_STORE)
 #define WINDOWS_LEAN_AND_MEAN
 #include <Windows.h>
 #include <shellapi.h>
@@ -33,7 +33,7 @@ int game_main(int argc, char* argv[]);
 namespace {
 
 bool RestartProcess(int argc, char* argv[]) {
-#if defined(__ANDROID__) || (defined(TARGET_OS_IOS) && TARGET_OS_IOS) ||                           \
+#if defined(AURORA_WINDOWS_STORE) || defined(__ANDROID__) || (defined(TARGET_OS_IOS) && TARGET_OS_IOS) ||                           \
     (defined(TARGET_OS_TV) && TARGET_OS_TV)
     (void)argc;
     (void)argv;
@@ -112,7 +112,7 @@ bool RestartProcess(int argc, char* argv[]) {
 #endif
 }
 
-#if _WIN32
+#if _WIN32 && !defined(AURORA_WINDOWS_STORE)
 bool ShouldShowWindowsConsole(int argc, char* argv[]) {
     if (const auto* env = std::getenv("DUSK_CONSOLE")) {
         if (env[0] != '\0' && env[0] != '0') {
@@ -225,7 +225,7 @@ int main(int argc, char* argv[]) {
     return DuskMain(argc, argv);
 }
 
-#if _WIN32
+#if _WIN32 && !defined(AURORA_WINDOWS_STORE)
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     return RunWindowsGuiEntryPoint();
 }
