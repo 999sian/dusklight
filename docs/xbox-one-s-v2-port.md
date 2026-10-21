@@ -1,7 +1,9 @@
 # Xbox One S UWP: Dusklight v2.0.3 port
 
-This branch starts at upstream v2.0.3. It is an experimental port and is not yet
-verified on hardware. The tested v1.1.1 package is preserved by tag
+This branch starts at upstream v2.0.3. It is an experimental port. Package
+2.0.3.33 built and installed in place on Xbox One S, preserved the ISO and save
+folder, initialized D3D12, and rendered the prelaunch menu. Starting the game
+still hangs on a black screen; gameplay is not verified. The tested v1.1.1 package is preserved by tag
 `xbox-one-s-baseline-1.1.1.25`.
 
 Build the root project using Visual Studio 2022, x64, WindowsStore 10.0,
