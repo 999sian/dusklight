@@ -26,7 +26,7 @@ resource names, listing/readability and file sizes. Hardware confirmation is
 still required; a flushed pre-enumeration checkpoint was also added.
 
 
-Latest retry: package **2.0.3.45** passed build `39612531442`, package inspection
+Previous retry: package **2.0.3.45** passed build `39612531442`, package inspection
 and in-place installation, retaining all five backed-up files unchanged. Normal
 startup still exits. The package-loader change alone did not fix it. Added a
 few flushed startup checkpoints around native runtime preparation, DLL opening,
@@ -160,10 +160,10 @@ the app: uninstalling can remove its data.
 | Local checkout | `/home/sian/Documents/dusklight-uwp` |
 | Active branch | `xbox-one-s-uwp-v2.0.3` |
 | Upstream v2.0.3 base | `40457c6adb381928e4b5fef6ed459ed291edd5e2` |
-| Installed build source | `af9cb1b6afb513899fef8ecc35f528a25a353974` |
-| Current optimization/mod build source | `b64be47` (CI pending) |
+| Working baseline source | `af9cb1b6afb513899fef8ecc35f528a25a353974` |
+| Current optimization/mod build source | `b5be9f8` (run `39660091944`, CI pending) |
 | Aurora fork | https://github.com/999sian/aurora — branch `xbox-one-s-v2.0.3`, pin `13baa5a` |
-| Borealis fork | https://github.com/999sian/borealis — branch `xbox-one-s-v2.0.3`, pin `c742129` |
+| Borealis fork | https://github.com/999sian/borealis — branch `xbox-one-s-v2.0.3`, pin `2b0b5b6` |
 | Pinned binary dependencies | SternXD/uwp-dep `810cdcb672383045a8b03d1d55bb535352d7d46f` |
 
 The upstream `v2.0.3` tag was also pushed to the personal fork. The installed

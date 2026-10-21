@@ -14,6 +14,16 @@ Compatibility is still experimental until checked on the console.
 
 ## Checks completed
 
+Package 46 isolation narrows the startup exit to directory-backed mod discovery:
+a plain folder containing only an asset manifest also reproduces it. Archived
+`.dusk` overrides stay running, including archives holding the original DLLs
+(which are safely rejected by the LocalState loading policy). This supersedes
+the earlier assumption that DLL loading itself had been isolated. Build 47
+(`39660091944`, source `b5be9f8`) tests lexical bundle-relative paths instead of
+physical filesystem resolution. Native loading and script activation remain
+unverified until a normal launch succeeds.
+
+
 Windows HTTP workflow run `39606283522` passed all 22 tests, including live HTTPS
 GET and HEAD requests to the official mod catalog, request cancellation and
 expired deadlines, plaintext rejection, download validation and file handling.

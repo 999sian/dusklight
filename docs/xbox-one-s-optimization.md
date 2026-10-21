@@ -1,7 +1,9 @@
 # Xbox One S logging and shader-cache checks
 
-Checked 21 October 2026. The working installed baseline is package 2.0.3.37;
-new logging, bundled-cache and mod builds still need console verification.
+Checked 21 October 2026. Package 2.0.3.37 is the known working baseline.
+Later package 42 isolation tests below verify logging/cache persistence while
+bypassing the mod discovery startup exit. Package 46 is currently installed;
+normal startup still fails, and build 47 is testing a folder-scanning correction.
 
 ## Buffered logging
 
