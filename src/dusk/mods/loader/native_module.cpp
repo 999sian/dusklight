@@ -7,7 +7,12 @@
 #endif
 
 namespace {
-#if defined(_WIN32)
+#if defined(AURORA_WINDOWS_STORE)
+void* pl_dlopen(const std::filesystem::path&) { return nullptr; }
+void* pl_dlsym(void*, const char*) { return nullptr; }
+void pl_dlclose(void*) {}
+std::string pl_dlerror() { return "Code mods are unavailable on Xbox UWP"; }
+#elif defined(_WIN32)
 void* pl_dlopen(const std::filesystem::path& p) {
     return LoadLibraryExW(p.wstring().c_str(), nullptr,
         LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);

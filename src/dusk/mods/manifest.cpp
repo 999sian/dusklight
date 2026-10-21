@@ -111,7 +111,9 @@ uint64_t fnv1a64(const char* str) {
 // PDB GUID (RFC 4122 byte order) + age on Windows, LC_UUID on Mach-O, GNU
 // build-id on ELF. Also reports the address RVAs are relative to.
 bool running_image_identity(std::vector<uint8_t>& outId, uintptr_t& outBase) {
-#if defined(_WIN32)
+#if defined(AURORA_WINDOWS_STORE)
+    return false;
+#elif defined(_WIN32)
     auto* base = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
     outBase = reinterpret_cast<uintptr_t>(base);
     const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
