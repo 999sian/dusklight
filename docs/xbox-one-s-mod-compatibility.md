@@ -8,7 +8,7 @@ Compatibility is still experimental until checked on the console.
 | Asset packs | Existing `.dusk` installer and resource overlays | Download/install in Xbox browser; texture memory use |
 | Luau scripts | Bundle the Luau runtime compiled for UWP | Script activation on Xbox |
 | Bundled native mods | Build Cosmetics, Randomizer and Luau with the game's UWP toolchain/import library | DLL loading, hooks and features on Xbox |
-| Downloaded native mods | Existing Windows x64 platform selection and native loader | Xbox API/CRT dependencies and loading from LocalState |
+| Downloaded native mods | Rejected by the UWP loader until a supported LocalState loading route exists | Xbox API/CRT compatibility; packaging compatible DLLs with the app |
 | Mods using HTTP | Windows.Web.Http transport through existing Borealis services | Xbox browser/download and mod requests |
 | Mods requiring WebSocket | Backend remains unavailable | A separate UWP WebSocket port is required |
 

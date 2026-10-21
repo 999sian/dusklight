@@ -8,30 +8,24 @@
 
 #if defined(AURORA_WINDOWS_STORE)
 #include "dusk/data.hpp"
-
-// App-partition headers hide LoadLibraryExW, but OneCore exports it; LoadPackagedLibrary
-// only accepts package-relative paths, so it can't load mods from LocalState.
-extern "C" __declspec(dllimport) HMODULE WINAPI LoadLibraryExW(LPCWSTR, HANDLE, DWORD);
-#ifndef LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR
-#define LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR 0x00000100
-#endif
-#ifndef LOAD_LIBRARY_SEARCH_DEFAULT_DIRS
-#define LOAD_LIBRARY_SEARCH_DEFAULT_DIRS 0x00001000
-#endif
 #endif
 
 namespace {
 #if defined(_WIN32)
 void* pl_dlopen(const std::filesystem::path& p) {
 #if defined(AURORA_WINDOWS_STORE)
-    const auto relative = p.lexically_relative(dusk::data::base_path_relative({}));
+    auto relative = p.lexically_relative(dusk::data::base_path_relative({}));
     if (!relative.empty() && !relative.is_absolute() && *relative.begin() != "..") {
         // Packaged UWP DLLs must use the package loader and their full package-relative path.
-        return LoadPackagedLibrary(relative.wstring().c_str(), 0);
+        return LoadPackagedLibrary(relative.make_preferred().wstring().c_str(), 0);
     }
-#endif
+    // shortcut: downloaded native DLLs need a supported Xbox loading route before enabling them.
+    SetLastError(ERROR_NOT_SUPPORTED);
+    return nullptr;
+#else
     return LoadLibraryExW(p.wstring().c_str(), nullptr,
         LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+#endif
 }
 void* pl_dlsym(void* h, const char* name) {
     return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(h), name));
