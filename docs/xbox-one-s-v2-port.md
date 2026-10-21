@@ -20,9 +20,17 @@ D3D12 backend selection, and `disable_resource_suballocation`. The latter
 avoids the Xbox One S driver crash in `CreatePlacedResource` observed with
 the original UWP port.
 
-Code mods, Discord, HTTP/WebSocket features and automatic online updates are
-unavailable in this initial port. Crash dumps are collected through Xbox Device
-Portal. Shader compilation performance has not been tuned.
+The next build enables native Windows x64 mods, bundles Luau, Cosmetics and
+Randomizer, and stages upstream's initial pipeline cache. It also selects a
+Windows.Web.Http transport for the built-in mod browser and mod HTTP services.
+These changes still require CI and Xbox verification. Discord and WebSocket
+services remain unavailable. Crash dumps are collected through Device Portal.
+
+The temporary per-debug-line file flush has been removed, restoring buffered
+logging and immediate flushing for warnings/errors. Keep `dawn_cache.db` and
+`pipeline_cache.db` across upgrades. The bundled pipeline list merges into the
+local cache; it is not compiled Xbox driver code and cannot eliminate initial
+shader compilation. No controlled CPU/FPS improvement has been measured yet.
 
 Package identity and publisher match the tested baseline. Each CI run uses a
 new `2.0.3.<run number>` package revision. Before deployment, back up settings and

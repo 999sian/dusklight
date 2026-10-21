@@ -41,10 +41,6 @@ void dusk::InitializeLogging(
     const std::filesystem::path& cacheDir, const borealis::cli::StandardOptions& standard) {
     borealis::log::Options options{};
     options.level = borealis::LogLevel::Debug;
-#ifdef AURORA_WINDOWS_STORE
-    // Preserve the final startup messages when the game hangs before a buffer flush.
-    options.flushOn = borealis::LogLevel::Debug;
-#endif
     options.fileDirectory = cacheDir.empty() ? std::filesystem::path{} : cacheDir / "logs";
     options.filePrefix = "dusklight";
     options.legacyFilePrefixes = {"dusk"};

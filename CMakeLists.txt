@@ -10,7 +10,7 @@ if (DUSK_UWP)
     set(CMAKE_SYSTEM_NAME WindowsStore)
     set(CMAKE_SYSTEM_VERSION 10.0)
     set(BOREALIS_ENABLE_DISCORD OFF CACHE BOOL "" FORCE)
-    set(BOREALIS_HTTP_BACKEND none CACHE STRING "" FORCE)
+    set(BOREALIS_HTTP_BACKEND winrt CACHE STRING "" FORCE)
 endif ()
 
 include(extern/borealis/cmake/DetectVersion.cmake)

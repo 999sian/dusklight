@@ -3,6 +3,43 @@
 Saved 21 October 2026 (Europe/London). This is a snapshot; check GitHub and
 Device Portal again before continuing.
 
+## Optimization and mod support work
+
+The startup freeze is fixed. The current focus is Xbox One S optimization,
+bundled pipeline-cache seeding and broad mod compatibility, including the
+built-in online mod browser. Native Windows x64 mods can still require APIs
+that Xbox UWP does not provide; compatibility must be checked on hardware.
+
+- Removed the temporary UWP `flushOn = Debug` override. Borealis retains debug
+  messages but buffers file output, flushing immediately at Warning and above.
+- Preserve the console's existing `dawn_cache.db` and `pipeline_cache.db`
+  during in-place updates. CI stages upstream v2.0.3's hash-pinned
+  `initial_pipeline_cache.db`; Aurora merges its pipeline records into the
+  local database. The seed is not compiled Xbox GPU code. First-run GPU
+  compilation remains necessary.
+- CI now builds and packages Luau runtime, Cosmetics and Randomizer. The UWP
+  architecture helper and `.dusk` ZIP extraction were fixed after the first
+  build failure. Hardware verification of native loading/hooks is pending.
+- Added a Windows.Web.Http transport to the Borealis fork and selected it for
+  UWP so the existing browser/download and mod HTTP services can use HTTPS.
+  It preserves certificate validation, streaming, cancellation, timeouts and
+  HTTPS-only redirects. Offline rejection tests and a Windows WinRT CI matrix
+  entry were added. Browser downloads on Xbox are not yet verified.
+- WebSocket services remain unavailable in this port. Mods requiring them
+  are not yet supported.
+
+The working installed baseline remains **2.0.3.37**. Its startup menu displayed
+60 FPS; a later intro/title screenshot at the saved 2x-resolution/interpolation
+settings displayed 47 FPS. These isolated readings are not benchmarks or proof
+of a CPU bottleneck. Device Portal reported zero CPU in samples even while
+rendering, so those samples are not usable measurements. Original settings
+were restored after this test.
+
+Newest settings/save backup:
+`/home/sian/Downloads/dusklight-xbox-diagnostics/before-v2-20261021-132511`.
+Shader/GPU caches and the ISO were not removed. Pending builds must pass package
+inspection and an in-place console test before recording an improvement.
+
 ## Current result
 
 Dusklight based on upstream **v2.0.3 builds successfully and installs on the
