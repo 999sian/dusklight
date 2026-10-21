@@ -22,7 +22,7 @@ add_executable(interpolation_storage_test interpolation_storage_test.cpp)
 target_link_libraries(interpolation_storage_test PRIVATE dusklight_game_headers absl::flat_hash_map fmt::fmt)
 # Eliminate unused engine paths; this test intentionally links no renderer/game runtime.
 if(MSVC)
-    target_compile_options(interpolation_storage_test PRIVATE /O2 /Gy /Gw /UNDEBUG)
+    target_compile_options(interpolation_storage_test PRIVATE /Zc:__cplusplus /O2 /Gy /Gw /UNDEBUG)
     target_link_options(interpolation_storage_test PRIVATE /OPT:REF)
 else()
     target_compile_options(interpolation_storage_test PRIVATE
