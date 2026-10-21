@@ -116,10 +116,11 @@ jobs:
           New-Item -ItemType Directory -Force $mods | Out-Null
           $bundles = @(Get-ChildItem build-uwp/bundled_mods -Filter *.dusk)
           if ($bundles.Count -ne 3) { throw "Expected 3 bundled mods, found $($bundles.Count)" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
           foreach ($bundle in $bundles) {
             $stage = Join-Path $env:RUNNER_TEMP $bundle.BaseName
             Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
-            Expand-Archive $bundle.FullName -DestinationPath $stage
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($bundle.FullName, $stage)
             $id = (Get-Content (Join-Path $stage 'mod.json') -Raw | ConvertFrom-Json).id
             if (!(Test-Path (Join-Path $stage 'lib/windows-amd64/mod.dll'))) { throw "$id has no windows-amd64 mod.dll" }
             Move-Item $stage (Join-Path $mods $id)
