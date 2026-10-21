@@ -1,4 +1,4 @@
 [submodule "extern/aurora"]
 	path = extern/aurora
-	url = https://github.com/SternXD/aurora.git
-	branch = uwp-dusk
+	url = https://github.com/999sian/aurora.git
+	branch = xbox-one-s-placed-resource

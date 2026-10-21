@@ -30,3 +30,12 @@ save/load and performance require hardware tests.
 
 Next: establish the baseline build, adapt the UWP integration and Aurora
 dependencies to upstream v2.0.3, then test on an Xbox One S.
+
+## Xbox startup investigation
+
+The first hardware test reaches Aurora, then crashes with access violation
+`0xc0000005` in the console D3D12 driver (`umd12ddi.dll`). The captured stack
+contains Dawn’s `ID3D12Device::CreatePlacedResource` path. The pinned Aurora fork
+enables Dawn’s `disable_resource_suballocation` toggle for UWP to test committed
+resource allocation instead. This workaround still needs a console retest; it
+may increase GPU memory use. Original logs and crash dump are retained locally.
