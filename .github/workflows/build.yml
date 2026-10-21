@@ -156,6 +156,21 @@ jobs:
           if (!$packages.Count) { throw 'Build succeeded without an installable UWP package.' }
           $package = $packages | Where-Object { $_.Name -like 'dusklight_*.msix' } | Select-Object -First 1
           if (!$package) { throw 'Dusklight MSIX was not produced.' }
+          # UWP packaging stages the executable before the post-build symbol embedding.
+          # Embed in the package layout and regenerate its block map and signature.
+          $layout = Join-Path $env:RUNNER_TEMP 'dusklight-symbol-layout'
+          makeappx unpack /p $package.FullName /d $layout /o
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & 'build-uwp/_deps/symgen/symgen-windows-x86_64.exe' manifest `
+            --pdb 'build-uwp/RelWithDebInfo/dusklight.pdb' --embed (Join-Path $layout 'dusklight.exe')
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          foreach ($stale in @('AppxSignature.p7x', 'AppxBlockMap.xml', 'AppxMetadata/CodeIntegrity.cat')) {
+            Remove-Item (Join-Path $layout $stale) -Force -ErrorAction SilentlyContinue
+          }
+          makeappx pack /d $layout /p $package.FullName /o
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          signtool sign /fd SHA256 /sha1 $env:UWP_CERT_THUMBPRINT $package.FullName
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
           try {

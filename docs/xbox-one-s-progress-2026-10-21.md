@@ -5,6 +5,16 @@ Device Portal again before continuing.
 
 ## Optimization and mod support work
 
+Also confirmed a packaging issue in 47: its executable contains `.symdbh` with
+zero RVA/size and no `.symdb`, matching the runtime's unavailable symbol-manifest
+message. Re-running the pinned SHA-256-verified symgen 1.3.6 against the exact
+packaged executable and matching PDB locally creates `.symdb` and fills the
+descriptor (RVA `0x1c06000`, size `0x3676e7`). The packaging correction embeds
+into the unpacked MSIX layout, regenerates the block map and signs it again.
+This avoids UWP's staging before the existing POST_BUILD embedding. The
+resulting signed MSIX and hook resolution still require CI/hardware checks.
+
+
 Follow-up verification on 47: the exact folder-only manifest test that exited
 on 46 now logs discovery and activation of `com.test.disk`; all four temporary
 asset-only mods are active and the process remains running at 30 seconds.
