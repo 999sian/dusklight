@@ -460,7 +460,7 @@ std::string_view platform() noexcept {
 }
 
 bool supports_native_installs() noexcept {
-#if defined(__APPLE__) && (TARGET_OS_IOS || TARGET_OS_TV)
+#if defined(AURORA_WINDOWS_STORE) || (defined(__APPLE__) && (TARGET_OS_IOS || TARGET_OS_TV))
     // Native libraries must be bundled and signed with the app.
     return false;
 #else

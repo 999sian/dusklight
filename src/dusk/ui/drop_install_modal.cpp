@@ -1,5 +1,6 @@
 #include "drop_install_modal.hpp"
 
+#include "dusk/mods/catalog.hpp"
 #include "dusk/mods/loader/loader.hpp"
 #include "dusk/mods/loader/packages.hpp"
 #include "dusk/mods/queue.hpp"
@@ -29,7 +30,8 @@ std::vector<DropPackage> prepare_packages(std::vector<DropPackage> packages) {
             package.status = "Duplicate package in this drop";
         } else if (!borealis::update::parse_version(package.metadata.version)) {
             package.status = "Invalid package version";
-        } else if (package.hasNative && !mods::EnableCodeMods) {
+        } else if (package.hasNative &&
+                   (!mods::EnableCodeMods || !mods::catalog::supports_native_installs())) {
             package.status = "Native mods cannot be installed on this platform";
         } else if (const auto queued = mods::queue::find_by_mod_id(package.metadata.id);
             queued && !mods::queue::is_terminal(queued->state))

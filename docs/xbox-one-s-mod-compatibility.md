@@ -22,6 +22,13 @@ and completion handling against Hylian Shield 1.0.0. The Randomizer
 endian self-check passed under MSVC with deprecations treated as errors, and
 under GCC locally. This does not prove Xbox runtime behavior.
 
+On Xbox package 42, with bundled native DLLs temporarily bypassed for isolation,
+the update service logged `Checked 3 installed mods for updates` on two launches.
+This confirms its HTTP request path on the console. Browser UI navigation and
+an in-app mod download/install have not yet been exercised. Each bundled native
+mod alone reproduces a startup exit; the package-loader correction is pending
+build/hardware verification. Temporary overrides were removed after testing.
+
 The catalog's Windows x64 query returned 68 entries on 21 October 2026:
 22 without native code and 46 with native code. These are published platform
 claims, not Xbox compatibility results.

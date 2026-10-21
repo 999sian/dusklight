@@ -76,6 +76,24 @@ each process start; changing that should wait for evidence of startup cost.
 
 ## Remaining hardware checks
 
+### Later package 42 isolation test
+
+Package 42 was inspected and installed in place, retaining settings/saves,
+the ISO and caches. Its bundled native mods cause startup exits; temporary
+asset-only overrides of all three let the menu run for 180 seconds and survive
+a further 30-second relaunch. The log confirms 2,695 seed rows merged with
+zero skipped on each launch. Dawn records went from 927 before this test to
+1,534 after the first run and 1,616 after the relaunch; both databases passed
+`quick_check` throughout. The pipeline database held 2,697 records. This proves
+continued persistence and seed import, not hit rate or an FPS gain. The queue
+was still compiling when the bounded test stopped.
+
+Evidence: `/home/sian/Downloads/dusklight-xbox-diagnostics/v42-cache-warmup-20261021-144931`.
+The app was stopped, temporary overrides removed, and configuration restored
+byte-for-byte. The native-loader correction still requires hardware testing.
+
+### Checks still required
+
 1. Inspect the successful MSIX for the expected seed and exact package identity.
 2. Back up settings/saves, install in place, and verify the exact new version.
 3. Confirm the seed-merge log and absence of cache/database errors. Leave caches
