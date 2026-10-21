@@ -40,6 +40,70 @@ local Xbox diagnostics folder. Initialization does not establish correct texture
 appearance, model swaps, HD-texture toggles or sustained gameplay. The browser
 installation permission failure remains unresolved; direct installation bypasses it.
 
+## TP Definitive Edition+ transfer: rolled back for disk space
+
+The four official archives for <https://gamebanana.com/mods/714018> downloaded
+and passed their published MD5 checksums. The page advertises 2.1.2; the actual
+published archives are named 2.1. All four extracted successfully.
+
+Following the author's assembly order, the default selection contains **4,788
+textures, 7.76 GB**. Ten duplicate basenames resolve to the first file in author
+folder order. The prepared layout excludes inactive alternates, optional water
+layer removal and desktop ReShade, and preserves original DDS/PNG bytes.
+The local SHA-256/source manifest is at
+`/home/sian/Downloads/TPDE-plus-2.1/xbox-install-manifest.json`.
+
+Transfer into the new isolated `texture_replacements/TPDE-plus-2.1` folder
+failed after the first batches. A single-file diagnostic upload returned HTTP
+500, code **-2147024784 (0x80070070)**, with `There is not enough space on the
+disk` / `File move failed`. App-data free space could not be queried beforehand;
+the deployment share's capacity is a different volume and is not applicable.
+
+All **143 partial-transfer files** were removed, with a post-cleanup listing
+confirming only `installation-info.txt` remains in that new folder. **No TPDE+
+textures are installed or active.** All verified originals remain on the host.
+The existing ISO, saves, settings, Dark Link and shader caches were preserved.
+Do not clear unrelated app data to make room. The full pack requires additional
+available console storage, or a separately chosen smaller texture selection.
+No pack runtime, in-game appearance or sustained memory-use result is claimed.
+After rollback, the normal menu rendered and the process remained running at
+30 seconds with **4/4 mods active**, including Dark Link. All five settings/save
+file hashes matched backup `before-v2-20261021-232204`. Evidence:
+`v49-after-tpde-rollback.log`, `v49-after-tpde-rollback.png` and
+`v49-after-tpde-file-check.json` in the local diagnostics folder.
+
+## Twilit Essentials 2.8.4: current-version port requirements
+
+The user wants the current release only. The official catalog publishes 2.8.4,
+and its 18,219,979-byte package was verified against SHA-256
+`721f63c64719d57c29479adff37b98801ce945f8127dcb0788bc24c64fe08e1f`.
+Its source link, <https://github.com/F1mmel/dusklight-twilit-essentials>,
+returns not found. No current public source was found in this investigation.
+
+The newest public source found is **1.2.1**, on
+<https://github.com/kamilink7/twilit-essentials-patch/tree/no-zitems>, commit
+`e60a3e463e6bdba6436e03c1a9a2ab931606d1f0` (18 September 2026).
+This branch disables Z-button item support; it is not the requested 2.8.4.
+No older version has been installed as a substitute.
+
+Static PE comparison of the released Windows x64 DLL against package 49 finds
+**1,095 imports from dusklight.exe, of which 889 are absent from the executable's
+PE export table**. This does not mean those functions are absent from the game:
+the embedded hook symbol manifest is separate from Windows DLL import resolution.
+Adding exports alone would also leave desktop USER32/SHELL32/process-enumeration
+and CRT dependencies to resolve, along with ABI and mod-service compatibility.
+The existing UWP loader accepts bundled native DLLs through LoadPackagedLibrary;
+it rejects downloaded native DLLs in LocalState.
+
+The practical route is a UWP rebuild of **current 2.8.4**, supplied by the author
+or built from its current source: port unsupported desktop calls, link against
+the Xbox game/mod interfaces, then bundle it in the signed MSIX and test its
+features on console. An Xbox-compatible binary supplied by the author is also
+worth evaluating without public source. Adapting the desktop binary through
+reverse engineering would be substantially larger, with uncertain correctness;
+no working adapter, author contact, or current-version Xbox compatibility is
+claimed. The author also warns of incomplete Randomizer compatibility.
+
 ## Checks completed
 
 Package 49 now contains the embedded game symbol manifest. Xbox logs load

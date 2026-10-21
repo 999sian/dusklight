@@ -3,6 +3,28 @@
 Saved 21 October 2026 (Europe/London). This is a snapshot; check GitHub and
 Device Portal again before continuing.
 
+## Latest texture-pack and current Essentials investigation
+
+TP Definitive Edition+ archives were fully downloaded/checksummed and extracted
+on the Linux host. The selected default pack is 4,788 textures / 7.76 GB.
+Xbox transfer failed with explicit **insufficient disk space (0x80070070)**.
+All 143 partial-transfer files were removed from the newly created pack folder;
+only an explanatory info file remains. No TPDE textures are active. A subsequent
+30-second launch rendered the menu with 4/4 mods active; all five settings/save
+hashes matched backup `before-v2-20261021-232204`. Original
+archives, extracted files and SHA-256 manifest remain in
+`/home/sian/Downloads/TPDE-plus-2.1`.
+
+Current Twilit Essentials **2.8.4** cannot load unchanged: 889 of its 1,095
+imports from dusklight.exe are absent from package 49's PE exports, and it also
+requires desktop Windows APIs/CRT dependencies. The hook symbol manifest does
+not satisfy Windows DLL imports. The official source repository is unavailable;
+the newest public source found is **1.2.1**, on the public fork's `no-zitems`
+branch, which disables Z-button items. User wants current version only; no
+older version or current desktop DLL was installed. A current-source UWP rebuild
+or author-provided Xbox-compatible build is the practical route.
+See `xbox-one-s-mod-compatibility.md` for source links and detailed limits.
+
 ## Optimization and mod support work
 
 Dark Link follow-up: `Play as Dark Link` 1.0.0 is now installed through Device
