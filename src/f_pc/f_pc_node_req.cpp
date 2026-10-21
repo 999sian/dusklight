@@ -313,7 +313,7 @@ node_create_request* fpcNdRq_CreateNode(u32 i_requestSize, s16 i_procName, void*
 node_create_request* fpcNdRq_Request(u32 i_requestSize, int i_reqType,
                                      process_node_class* i_procNode, s16 i_procName, void* i_data,
                                      node_create_request_method_class* i_create_req_methods) {
-    node_create_request* req;
+    node_create_request* req = nullptr;
     switch (i_reqType) {
     case 0:
         req = fpcNdRq_CreateNode(i_requestSize, i_procName, i_data);

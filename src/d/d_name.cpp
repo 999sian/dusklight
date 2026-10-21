@@ -1365,7 +1365,7 @@ void dName_c::backSpace() {
 
 void dName_c::mojiListChange() {
     #if TARGET_PC
-    const char** mojiSet;
+    const char** mojiSet = nullptr;
     if (dusk::version::isRegionPal()) {
         switch (mMojiSet) {
         case MOJI_HIRA:
@@ -1389,7 +1389,7 @@ void dName_c::mojiListChange() {
         }
     }
     #elif REGION_PAL
-    char** mojiSet;
+    char** mojiSet = nullptr;
 
     switch (mMojiSet) {
     case MOJI_HIRA:
@@ -1400,7 +1400,7 @@ void dName_c::mojiListChange() {
         break;
     }
     #else
-    const char** mojiSet;
+    const char** mojiSet = nullptr;
 
     switch (mMojiSet) {
     case MOJI_HIRA:

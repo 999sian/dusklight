@@ -147,8 +147,8 @@ static int daObjSM_DOOR_Execute(daObjSM_DOOR_c* i_this) {
 }
 
 inline int daObjSM_DOOR_c::CreateHeap() {
-    J3DModelData* model_data;
-    J3DModelData* alpha_model_data;
+    J3DModelData* model_data = nullptr;
+    J3DModelData* alpha_model_data = nullptr;
 
     if (mType == 0) {
         model_data = (J3DModelData*)dComIfG_getObjectRes(l_arcName, "A_SM_DoorA.bmd");

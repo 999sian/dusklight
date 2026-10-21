@@ -3721,9 +3721,9 @@ static void demo_camera(e_wb_class* i_this) {
     camera_process_class* cam = dComIfGp_getCamera(dComIfGp_getPlayerCameraID(0));
     camera_process_class* cam0 = dComIfGp_getCamera(0);
     daPy_py_c* pla = (daPy_py_c*)dComIfGp_getPlayer(0);
-    daHorse_c* horse;
-    e_rd_class* rider;
-    e_rdb_class* boss;
+    daHorse_c* horse = nullptr;
+    e_rd_class* rider = nullptr;
+    e_rdb_class* boss = nullptr;
     if (i_this->demo_mode != 0) {
         horse = (daHorse_c*)dComIfGp_getHorseActor();
         rider = (e_rd_class*)fopAcM_SearchByID(i_this->rd_id);

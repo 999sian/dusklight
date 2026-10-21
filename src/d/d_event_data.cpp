@@ -185,7 +185,7 @@ s32 event_debug_evdt_sound_adjust() {
 #endif
 
 static int dEvDt_Next_Stage(int i_staffId, int i_wipe) {
-    char* stage;
+    char* stage = nullptr;
     s16 start;
     int mode;
     s8 room;

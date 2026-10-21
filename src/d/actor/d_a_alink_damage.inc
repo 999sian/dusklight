@@ -1097,8 +1097,8 @@ int daAlink_c::procCoLargeDamageInit(int i_type, BOOL i_isLargeDmg, s16 param_2,
         shape_angle.y = current.angle.y + 0x8000;
     }
 
-    const daAlinkHIO_wlDamLaHu_c1* wolfDmgParams;
-    const daAlinkHIO_damLaHu_c1* dmgParams;
+    const daAlinkHIO_wlDamLaHu_c1* wolfDmgParams = nullptr;
+    const daAlinkHIO_damLaHu_c1* dmgParams = nullptr;
     if (checkWolf()) {
         if (i_isLargeDmg) {
             wolfDmgParams = &mpHIO->mWolf.mWlDamage.mLarge.m;

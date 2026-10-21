@@ -224,7 +224,7 @@ static int daObj_Balloon_Delete(daObj_Balloon_c* i_this) {
 }
 
 int daObj_Balloon_c::CreateHeap() {
-    J3DModelData* modelData;
+    J3DModelData* modelData = nullptr;
     if (mType == SIZE_LARGE_e) {
         modelData = (J3DModelData*)dComIfG_getObjectRes("Obj_bal", 3);
     } else if (mType == SIZE_MEDIUM_e) {

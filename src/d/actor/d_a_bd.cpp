@@ -226,7 +226,7 @@ static int land_check(bd_class* i_this) {
     s16 spA = cM_atan2s(sp30.x, sp30.z);
 
     int land_pos_len;
-    land_pos* land_pos;
+    land_pos* land_pos = nullptr;
     if (strcmp(dComIfGp_getStartStageName(), "F_SP103") == 0) {
         land_pos_len = 20;
         land_pos = land_pos103;

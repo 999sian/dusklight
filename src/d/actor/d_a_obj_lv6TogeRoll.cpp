@@ -121,7 +121,7 @@ int daTogeRoll_c::create() {
 int daTogeRoll_c::Execute(Mtx** i_mtx) {
     moveTogeRoll();
 
-    cCcD_ObjHitInf* gobj;
+    cCcD_ObjHitInf* gobj = nullptr;
     cCcD_Obj* obj = NULL;
     u32 se_id;
 

@@ -312,7 +312,7 @@ void Z2FxLineEditNode::message(JAHControl& control) {
 
 void Z2FxLineEditNode::syncSetting(u8 param_1, JASDsp::FxlineConfig_* config) {
     JUT_ASSERT(387, config);
-    Z2FxLineConfigSingle* line_HIO;
+    Z2FxLineConfigSingle* line_HIO = nullptr;
     switch (param_1) {
     case 0:
         line_HIO = &unk74->unk70.unk0;

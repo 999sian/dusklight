@@ -3404,7 +3404,7 @@ void daB_GG_c::StopAction() {
     if ((mCcCyl.ChkTgShield() && mCcCyl.ChkTgHit()) || mCcHookCyl.ChkTgHit()) {
         mAtInfo.field_0x18 = 0x2A;
 
-        cCcD_Obj* tg_hit_obj;
+        cCcD_Obj* tg_hit_obj = nullptr;
         if (mCcCyl.ChkTgHit()) {
             mAtInfo.mpCollider = mCcCyl.GetTgHitObj();
             tg_hit_obj = mCcCyl.GetTgHitObj();

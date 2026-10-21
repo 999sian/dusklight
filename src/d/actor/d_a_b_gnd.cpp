@@ -2889,7 +2889,7 @@ static void demo_camera(b_gnd_class* i_this) {
     mant_class* mant_p = (mant_class*)fopAcM_SearchByID(i_this->mMantChildID);
     dScnKy_env_light_c* kankyo = dKy_getEnvlight();
 
-    daHorse_c* horse;
+    daHorse_c* horse = nullptr;
     if (i_this->mDemoCamMode != 0) {
         // fakematch - dComIfGp_getHorseActor() isn't getting inlined for some reason
         horse = (daHorse_c*)g_dComIfG_gameInfo.play.getPlayerPtr(1);
@@ -4059,7 +4059,7 @@ static int daB_GND_Execute(b_gnd_class* i_this) {
         i_this->mAcch.CrrPos(dComIfG_Bgsp());
     }
 
-    J3DModel* sp6C;
+    J3DModel* sp6C = nullptr;
     if (i_this->mDrawHorse) {
         mDoMtx_stack_c::transS(i_this->field_0xeb4.x, i_this->field_0xeb4.y, i_this->field_0xeb4.z);
         mDoMtx_stack_c::YrotM(i_this->field_0xec0.y);

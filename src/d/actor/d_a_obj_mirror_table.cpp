@@ -155,7 +155,7 @@ void daObjMirrorTable_c::checkOnPanel() {
     mDoMtx_stack_c::inverse();
     if (daPy_py_c::checkNowWolf()) {
         for (int i = 0; i < 4; i++) {
-            cXyz* pos;
+            cXyz* pos = nullptr;
             switch (i) {
             case 0:
                 pos = player->getLeftHandPosP();

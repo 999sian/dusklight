@@ -3853,7 +3853,7 @@ int daHorse_c::procStop() {
     static const f32 stopEffEndFrame = 29.0f;
     static const f32 stopStandEffEndFrame = 32.0f;
 
-    const unk_foot_eff_t* var_r29;
+    const unk_foot_eff_t* var_r29 = nullptr;
     daPy_frameCtrl_c* frame_ctrl = &m_frameCtrl[0];
     int var_r25 = checkHorseNoMove(TRUE);
 

@@ -3682,7 +3682,7 @@ static f32 yuka_jump_x = 80.0f;
 static int npc_ks_option(npc_ks_class* i_this) {
     fopAc_ac_c* actor = &i_this->actor;
     fopAc_ac_c* player = (fopAc_ac_c*) dComIfGp_getPlayer(0);
-    fopAc_ac_c* actor_p;
+    fopAc_ac_c* actor_p = nullptr;
     cXyz mae, ato;
     f32 target_speed = 0.0f;
     f32 step_speed = 5.0f;

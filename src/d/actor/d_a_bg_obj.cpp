@@ -365,7 +365,7 @@ void daBgObj_c::settingCullSizeBoxForCo(int param_0) {
         J3DModelData* model_data = cur_model->mModelData;
         mDoMtx_stack_c::identity();
         J3DJointTree& joint_tree = model_data->getJointTree();
-        J3DJoint* joint;
+        J3DJoint* joint = nullptr;
         for (u16 i = 0; i < joint_tree.getJointNum(); i++) {
             joint = joint_tree.getJointNodePointer(i);
             Mtx trans_rot_mat;
@@ -392,7 +392,7 @@ void daBgObj_c::settingCullSizeBoxForCull(int param_0) {
         if (cur_model != NULL) {
             J3DModelData* model_data = cur_model->mModelData;
             mDoMtx_stack_c::identity();
-            J3DJoint* joint;
+            J3DJoint* joint = nullptr;
             for (u16 j = 0; j < model_data->getJointNum(); j++) {
                 joint = model_data->getJointNodePointer(j);
                 Mtx trans_rot_mat;

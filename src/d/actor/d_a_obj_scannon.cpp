@@ -53,7 +53,7 @@ daSCannon_c::daSCannon_c() {
 }
 
 daSCannon_c::~daSCannon_c() {
-    char DUSK_CONST* arcname;
+    char DUSK_CONST* arcname = nullptr;
     if (mLayerNo == 3 || mLayerNo == 10) {
         arcname = l_arcName_Comp;
     } else if (mLayerNo == 1) {
@@ -264,7 +264,7 @@ void daSCannon_c::setPtlModelMtx() {
 }
 
 int daSCannon_c::createHeap() {
-    char DUSK_CONST* arcname;
+    char DUSK_CONST* arcname = nullptr;
     int bmd_index;
     int dzb_index;
 

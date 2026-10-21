@@ -273,7 +273,7 @@ static dPath* set_path_info(fopAc_ac_c* i_this) {
 static dPnt* near_rail_get(kytag06_class* i_this, cXyz* i_pos) {
     f32 nearest_dist = 100000000.0f;
     dPath* path = i_this->mpPath;
-    dPnt* pnt;
+    dPnt* pnt = nullptr;
 
     for (int i = 0; i < path->m_num; i++) {
         f32 pnt_dist = i_pos->abs(path->m_points[i].m_position);
