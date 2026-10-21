@@ -16,8 +16,10 @@ when allowed individually. Temporary overrides were removed and configuration
 restored after each test. This isolates a shared native-loading/init problem;
 Device Portal did not retain a usable crash dump. A change to use the supported
 package-relative `LoadPackagedLibrary` route for bundled UWP DLLs is awaiting
-a new Windows build and hardware verification. External downloaded DLL loading
-remains experimental. Do not describe 42 as a working replacement for 37.
+a new Windows build and hardware verification. Downloaded native DLLs are now
+rejected until a supported Xbox loading route is established. The current retry
+is run `39611566818`; it supersedes canceled run `39611025870`.
+Do not describe 42 as a working replacement for 37.
 
 Latest backup before installing 42:
 `/home/sian/Downloads/dusklight-xbox-diagnostics/before-v2-20261021-141733`.
