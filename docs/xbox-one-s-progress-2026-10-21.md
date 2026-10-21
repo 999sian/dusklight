@@ -1,15 +1,109 @@
 # Dusklight on Xbox One S — progress and handoff
 
-Saved 21 October 2026 (Europe/London). This is a snapshot; check GitHub and
+Updated 22 October 2026 (Europe/London). This is a snapshot; check GitHub and
 Device Portal again before continuing.
 
-## Latest texture-pack and current Essentials investigation
+## Latest: full pack enabled on internal D: storage
+
+The complete TPDE+ selection transferred successfully via SMB: **4,788 files,
+7,764,942,214 bytes**, in 646 seconds. All remote names/sizes match the manifest;
+three downloaded samples, including the largest file, match SHA256. The temporary
+SMB credential file was removed. Original archive/source files remain local.
+
+The existing custom data-folder feature is now enabled at
+`D:\DevelopmentFiles\DusklightData`. The app stayed running through a bounded
+60-second startup check, loaded its config there, registered **4,730 texture
+replacements**, and activated **4/4 mods**. The screenshot shows the Dusklight
+menu with disc ready and shader compilation still in progress; it does not
+establish gameplay FPS or complete texture compatibility. One warning reports
+a texture thumbnail of 41×64 is not aligned to BC compression's 4×4 blocks.
+Not every transferred file becomes a registration; no claim of all-file
+compatibility is made. Observed working set rose from about 494 to 705 MiB,
+which is startup evidence, not peak gameplay memory.
+
+The first activation precheck stopped before changing the data-folder setting
+because U: config had gained `backend.graphicsBackend=d3d12` since the older
+backup. The only semantic difference was verified; a fresh backup retained
+that preference and the D: config was updated to match it. All original seven
+and copied six settings/save/mod files then matched the fresh backup before
+and after startup. Evidence in local diagnostics:
+`before-internal-pack-20261022`, `v49-tpde-internal-verification.json`,
+`v49-tpde-internal.log`, `v49-tpde-internal.png`; transfer evidence is
+`TPDE-plus-2.1/xbox-smb-upload-result.json` under Downloads.
+
+**Current paths:** new saves, config, mods and texture replacements use D:.
+The ISO stays at its original U: absolute path. Logs and compiled shader caches
+also remain in the original U: preference directory. Original U: settings/saves
+remain as a snapshot; later gameplay saves will be in D:. The app is left
+running at the menu after the check. No TV input/power commands were sent.
+
+To revert the custom folder, stop the app and remove only `data_location.json`
+from the original U: preference directory. Back up newer D: saves first;
+reversion otherwise selects the older U: snapshot. Do not resize development
+storage again without backing up the now-active D: data.
+
+The CPU scan is recorded in `xbox-one-s-1080p60-assessment.md`, with source
+references, candidate changes and safety/measurement checks. Warm-gameplay
+priorities are FIFO publication batching, matrix snapshot storage reuse and
+material capture allocation reduction. Shader/texture queue improvements mainly
+address loading periods. No functional optimization or measured speedup yet.
+
+## Developer storage resize verification
+
+The user increased Developer Mode storage to **49 GB** and restarted. Device
+Portal returned with package **2.0.3.49** still installed. All seven saved
+settings/save/mod files matched backup `before-v2-20261021-232204`, and the
+1,459,978,240-byte game ISO remained present. SMB reports DevelopmentFiles has
+12,845,053 blocks of 4096 bytes total and 12,839,486 free (about 49 GiB free).
+This verifies the D: development-files allocation, not the U: app-data capacity.
+Evidence: local diagnostics `after-storage-resize.json`.
+
+The transfer retry after resizing still failed after two accepted batches with
+HTTP 500 on the next upload. All **154** partial-transfer files were removed;
+only the explanatory info file remains in U:. This failed route is superseded
+by the successful D: installation above. Do not
+interpret the D: free-space figure as proof that U: uploads can use that space.
+
+The user requested a subagent assessment of a **1080p / 60 FPS** target. See
+`xbox-one-s-1080p60-assessment.md`: simulation remains 30 Hz, with existing frame
+interpolation targeting 60 rendered frames. Priorities are a real gameplay
+baseline, testing the current DoF key (`game.depthOfFieldMode=0`) in place of
+the ineffective legacy key, bloom A/B tests, actual render-resolution checks,
+and measured texture-cache/upload budgets. No performance code or settings
+were changed by the assessment, and no FPS gain is established.
+
+## Earlier internal-storage probe and staging
+
+A temporary ISO copied to `D:\DevelopmentFiles\DusklightStorageProbe` was
+successfully verified/read as GZ2P01 by the unchanged app. The original ISO
+setting was restored byte-for-byte after the test. Logs/screenshot:
+`v49-internal-read.log` / `v49-internal-read.png`.
+
+A separate test used the existing version-1 `data_location.json` feature with
+customPath `D:\DevelopmentFiles\DusklightData`, with **no previousPath** and
+copies of the five settings/save files plus Dark Link. This avoids invoking
+migration of the original current data. The existing legacy Dusk folder is
+absent; originals in U: were preserved. The app loaded the D: config, registered
+one sample texture, activated **4/4 mods**, and stayed running at 30 seconds.
+Evidence: `v49-custom-data-test.log` / `v49-custom-data-test.png`. The first
+monitoring attempt incorrectly looked for logs in D:; logs and compiled caches
+remain in the original U: preference location, as intended by the data manager.
+The descriptor was removed afterward and the app stopped before staging the
+full pack. No source/build changes are necessary for this route.
+
+The full texture pack was then copied via authenticated SMB to the isolated
+D: data folder and verified before activation, as recorded above. The original
+U: data and ISO remain in place. The local upload script is
+`/tmp/dusk-tpde-smb-upload.py`.
+
+## Earlier texture-pack rollback and current Essentials investigation
 
 TP Definitive Edition+ archives were fully downloaded/checksummed and extracted
 on the Linux host. The selected default pack is 4,788 textures / 7.76 GB.
 Xbox transfer failed with explicit **insufficient disk space (0x80070070)**.
 All 143 partial-transfer files were removed from the newly created pack folder;
-only an explanatory info file remains. No TPDE textures are active. A subsequent
+only an explanatory info file remains in U:. This initial failure is superseded
+by the D: installation above. A subsequent
 30-second launch rendered the menu with 4/4 mods active; all five settings/save
 hashes matched backup `before-v2-20261021-232204`. Original
 archives, extracted files and SHA-256 manifest remain in

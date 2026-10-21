@@ -40,7 +40,25 @@ local Xbox diagnostics folder. Initialization does not establish correct texture
 appearance, model swaps, HD-texture toggles or sustained gameplay. The browser
 installation permission failure remains unresolved; direct installation bypasses it.
 
-## TP Definitive Edition+ transfer: rolled back for disk space
+## TP Definitive Edition+: internal-storage installation
+
+**Update, 22 October:** after expanding Developer Mode storage to 49 GB, the
+full 4,788-file / 7,764,942,214-byte selection transferred via SMB to
+`D:\DevelopmentFiles\DusklightData\texture_replacements\TPDE-plus-2.1`.
+All remote filenames/sizes and three sampled SHA256 hashes matched. The existing
+custom data-folder feature now uses D: for config/saves/mods/textures; the ISO,
+logs and compiled caches remain at their original U: paths. Original U: data
+was retained, and both original/copied saved-file hashes passed before/after
+the bounded startup check. See the progress document for backup and rollback.
+
+Startup stayed running through 60 seconds with **4,730 texture registrations**
+and **4/4 mods active**, reaching the menu while shaders compiled. One warning
+reports an unaligned 41×64 BC texture thumbnail. All transferred files becoming
+usable textures, appearance during gameplay, browser installation permissions,
+peak memory and sustained FPS remain unverified. Evidence:
+`v49-tpde-internal.log`, `.png` and `-verification.json` in local diagnostics.
+
+### Earlier U: transfer failure (superseded)
 
 The four official archives for <https://gamebanana.com/mods/714018> downloaded
 and passed their published MD5 checksums. The page advertises 2.1.2; the actual
@@ -60,8 +78,9 @@ disk` / `File move failed`. App-data free space could not be queried beforehand;
 the deployment share's capacity is a different volume and is not applicable.
 
 All **143 partial-transfer files** were removed, with a post-cleanup listing
-confirming only `installation-info.txt` remains in that new folder. **No TPDE+
-textures are installed or active.** All verified originals remain on the host.
+confirming only `installation-info.txt` remains in that U: folder. No TPDE+
+textures were active at that point; the later D: installation supersedes this
+state. All verified originals remain on the host.
 The existing ISO, saves, settings, Dark Link and shader caches were preserved.
 Do not clear unrelated app data to make room. The full pack requires additional
 available console storage, or a separately chosen smaller texture selection.
