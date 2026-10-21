@@ -5,6 +5,25 @@ Device Portal again before continuing.
 
 ## Optimization and mod support work
 
+Latest hardware check: package **2.0.3.42** built successfully in run
+`39605326169` and was installed in place. All five backed-up settings/save
+files matched their previous SHA-256 after installation; the ISO and both
+caches remained present. The normal launch exits during native-mod startup.
+Temporary asset-only packages shadowing all three bundled native mods let the
+same package reach its menu and remain running for 30 seconds, with the shader
+warmup queue visible. Luau, Cosmetics and Randomizer each reproduce the exit
+when allowed individually. Temporary overrides were removed and configuration
+restored after each test. This isolates a shared native-loading/init problem;
+Device Portal did not retain a usable crash dump. A change to use the supported
+package-relative `LoadPackagedLibrary` route for bundled UWP DLLs is awaiting
+a new Windows build and hardware verification. External downloaded DLL loading
+remains experimental. Do not describe 42 as a working replacement for 37.
+
+Latest backup before installing 42:
+`/home/sian/Downloads/dusklight-xbox-diagnostics/before-v2-20261021-141733`.
+Evidence: `v42-first-launch.png`, `v42-without-native-mods.png` and
+`v42-startup.log` in the same diagnostics parent directory.
+
 The startup freeze is fixed. The current focus is Xbox One S optimization,
 bundled pipeline-cache seeding and broad mod compatibility, including the
 built-in online mod browser. Native Windows x64 mods can still require APIs

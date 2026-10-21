@@ -7,6 +7,8 @@
 #endif
 
 #if defined(AURORA_WINDOWS_STORE)
+#include "dusk/data.hpp"
+
 // App-partition headers hide LoadLibraryExW, but OneCore exports it; LoadPackagedLibrary
 // only accepts package-relative paths, so it can't load mods from LocalState.
 extern "C" __declspec(dllimport) HMODULE WINAPI LoadLibraryExW(LPCWSTR, HANDLE, DWORD);
@@ -21,6 +23,13 @@ extern "C" __declspec(dllimport) HMODULE WINAPI LoadLibraryExW(LPCWSTR, HANDLE, 
 namespace {
 #if defined(_WIN32)
 void* pl_dlopen(const std::filesystem::path& p) {
+#if defined(AURORA_WINDOWS_STORE)
+    const auto relative = p.lexically_relative(dusk::data::base_path_relative({}));
+    if (!relative.empty() && !relative.is_absolute() && *relative.begin() != "..") {
+        // Packaged UWP DLLs must use the package loader and their full package-relative path.
+        return LoadPackagedLibrary(relative.wstring().c_str(), 0);
+    }
+#endif
     return LoadLibraryExW(p.wstring().c_str(), nullptr,
         LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
 }
