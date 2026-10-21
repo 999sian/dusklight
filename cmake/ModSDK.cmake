@@ -29,6 +29,8 @@ function(_mod_lib_info out_platform_var out_name_var)
     string(TOLOWER "${CMAKE_SYSTEM_NAME}" _platform)
     if (_platform STREQUAL "darwin")
         set(_platform "macos")
+    elseif (_platform STREQUAL "windowsstore")
+        set(_platform "windows")  # UWP loads the same windows-<arch> mod libraries
     endif ()
     string(TOLOWER "${_arch}" _arch)
     if (_arch MATCHES "^(i[3-6]86|x86)$")

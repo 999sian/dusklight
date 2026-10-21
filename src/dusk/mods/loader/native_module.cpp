@@ -6,13 +6,20 @@
 #include <Windows.h>
 #endif
 
-namespace {
 #if defined(AURORA_WINDOWS_STORE)
-void* pl_dlopen(const std::filesystem::path&) { return nullptr; }
-void* pl_dlsym(void*, const char*) { return nullptr; }
-void pl_dlclose(void*) {}
-std::string pl_dlerror() { return "Code mods are unavailable on Xbox UWP"; }
-#elif defined(_WIN32)
+// App-partition headers hide LoadLibraryExW, but OneCore exports it; LoadPackagedLibrary
+// only accepts package-relative paths, so it can't load mods from LocalState.
+extern "C" __declspec(dllimport) HMODULE WINAPI LoadLibraryExW(LPCWSTR, HANDLE, DWORD);
+#ifndef LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR
+#define LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR 0x00000100
+#endif
+#ifndef LOAD_LIBRARY_SEARCH_DEFAULT_DIRS
+#define LOAD_LIBRARY_SEARCH_DEFAULT_DIRS 0x00001000
+#endif
+#endif
+
+namespace {
+#if defined(_WIN32)
 void* pl_dlopen(const std::filesystem::path& p) {
     return LoadLibraryExW(p.wstring().c_str(), nullptr,
         LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);

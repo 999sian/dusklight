@@ -54,3 +54,43 @@ ${_original}
     endforeach ()
     file(WRITE "${SOURCE_DIR}/src/funchook.c" "${_content}")
 endif ()
+
+# UWP: only the *FromApp memory APIs are allowed and they reject RWX pages (the codeGeneration
+# capability permits RW <-> RX flips). GetModuleHandleEx and psapi are desktop-only.
+file(READ "${SOURCE_DIR}/src/funchook_windows.c" _content)
+if (NOT _content MATCHES "FUNCHOOK_UWP")
+    set(_uwp_prelude [=[#include "funchook_internal.h"
+#if defined(WINAPI_FAMILY) && WINAPI_FAMILY == WINAPI_FAMILY_APP
+#define FUNCHOOK_UWP 1
+#define VirtualAlloc(addr, size, type, prot) VirtualAllocFromApp(addr, size, type, prot)
+#define VirtualProtect(addr, size, prot, old) VirtualProtectFromApp(addr, size, prot, old)
+#define GetMappedFileNameA(process, addr, buf, size) 0
+/* ponytail: target pages go RW (not RWX) while the jump is written, so a thread executing
+   that page at that instant faults. Hooks install during mod load; an RX alias via
+   section mapping would close the window if it ever bites. */
+#define FUNCHOOK_PATCH_PROTECTION PAGE_READWRITE
+#else
+#define FUNCHOOK_PATCH_PROTECTION PAGE_EXECUTE_READWRITE
+#endif]=])
+    set(_module_original "    ok = GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, func, &hMod);")
+    set(_module_replacement [=[#ifdef FUNCHOOK_UWP
+    {
+        MEMORY_BASIC_INFORMATION mbi;
+        ok = VirtualQuery(func, &mbi, sizeof(mbi)) != 0 && mbi.Type == MEM_IMAGE;
+        hMod = (HMODULE)mbi.AllocationBase;
+    }
+#else
+    ok = GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, func, &hMod);
+#endif]=])
+    foreach (_site "#include \"funchook_internal.h\"" "PAGE_EXECUTE_READWRITE, &mstate->protect" "${_module_original}")
+        string(FIND "${_content}" "${_site}" _position)
+        if (_position EQUAL -1)
+            message(FATAL_ERROR "Funchook UWP patch site changed: ${_site}")
+        endif ()
+    endforeach ()
+    string(REPLACE "#include \"funchook_internal.h\"" "${_uwp_prelude}" _content "${_content}")
+    string(REPLACE "PAGE_EXECUTE_READWRITE, &mstate->protect" "FUNCHOOK_PATCH_PROTECTION, &mstate->protect"
+        _content "${_content}")
+    string(REPLACE "${_module_original}" "${_module_replacement}" _content "${_content}")
+    file(WRITE "${SOURCE_DIR}/src/funchook_windows.c" "${_content}")
+endif ()

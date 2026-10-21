@@ -17,6 +17,7 @@
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+extern "C" IMAGE_DOS_HEADER __ImageBase;  // Linker-provided base of this image.
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
 #include <mach-o/loader.h>
@@ -111,10 +112,9 @@ uint64_t fnv1a64(const char* str) {
 // PDB GUID (RFC 4122 byte order) + age on Windows, LC_UUID on Mach-O, GNU
 // build-id on ELF. Also reports the address RVAs are relative to.
 bool running_image_identity(std::vector<uint8_t>& outId, uintptr_t& outBase) {
-#if defined(AURORA_WINDOWS_STORE)
-    return false;
-#elif defined(_WIN32)
-    auto* base = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+#if defined(_WIN32)
+    // __ImageBase is this module, the game executable; GetModuleHandleW is desktop-only.
+    auto* base = reinterpret_cast<uint8_t*>(&__ImageBase);
     outBase = reinterpret_cast<uintptr_t>(base);
     const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
     const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);

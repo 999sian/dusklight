@@ -70,13 +70,61 @@ jobs:
           $manifest.Package.Identity.Version = "2.0.3.$revision"
           $manifest.Save($path)
 
+      # Upstream ships this backend-neutral pipeline list with desktop builds; Aurora compiles
+      # it in the background on first launch instead of stalling on first use.
+      - name: Fetch pinned initial pipeline cache
+        run: |
+          $extra = Join-Path $env:GITHUB_WORKSPACE 'build/uwp-extra'
+          New-Item -ItemType Directory -Force $extra | Out-Null
+          $zip = Join-Path $env:RUNNER_TEMP 'dusklight-win64.zip'
+          gh release download v2.0.3 --repo TwilitRealm/dusklight -p 'Dusklight-v2.0.3-win32-x86_64.zip' -O $zip
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile(
+              $archive.GetEntry('initial_pipeline_cache.db'), (Join-Path $extra 'initial_pipeline_cache.db'), $true)
+          } finally { $archive.Dispose() }
+          $hash = (Get-FileHash (Join-Path $extra 'initial_pipeline_cache.db') -Algorithm SHA256).Hash
+          if ($hash -ne '8C6C7D974946B71AEE7FA90542085B333AF9E2726B16DCCB34F808F2C0C5C2F0') {
+            throw "Unexpected initial pipeline cache hash $hash"
+          }
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Configure UWP application
         run: |
           cmake -S . -B build-uwp -G "Visual Studio 17 2022" -A x64 `
             -DDUSK_UWP=ON -DCMAKE_SYSTEM_NAME=WindowsStore -DCMAKE_SYSTEM_VERSION=10.0 `
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
             -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded `
-            -DAURORA_UWP_DEP_SOURCE_DIR="$env:GITHUB_WORKSPACE/build/uwp-dep"
+            -DAURORA_UWP_DEP_SOURCE_DIR="$env:GITHUB_WORKSPACE/build/uwp-dep" `
+            -DDUSK_UWP_EXTRA_CONTENT_DIR="$env:GITHUB_WORKSPACE/build/uwp-extra"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      # Mods link against the import library the game build emits, so they are built after
+      # it and staged pre-extracted into the package, where they load in place.
+      - name: Build game and bundled mods
+        run: |
+          cmake --build build-uwp --config RelWithDebInfo --parallel 4 --target dusklight -- `
+            /p:GenerateAppxPackageOnBuild=false
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build-uwp --config RelWithDebInfo --parallel 4 `
+            --target luau_runtime_package cosmetics_package randomizer_package
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $mods = Join-Path $env:GITHUB_WORKSPACE 'build/uwp-extra/mods'
+          New-Item -ItemType Directory -Force $mods | Out-Null
+          $bundles = @(Get-ChildItem build-uwp/bundled_mods -Filter *.dusk)
+          if ($bundles.Count -ne 3) { throw "Expected 3 bundled mods, found $($bundles.Count)" }
+          foreach ($bundle in $bundles) {
+            $stage = Join-Path $env:RUNNER_TEMP $bundle.BaseName
+            Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
+            Expand-Archive $bundle.FullName -DestinationPath $stage
+            $id = (Get-Content (Join-Path $stage 'mod.json') -Raw | ConvertFrom-Json).id
+            if (!(Test-Path (Join-Path $stage 'lib/windows-amd64/mod.dll'))) { throw "$id has no windows-amd64 mod.dll" }
+            Move-Item $stage (Join-Path $mods $id)
+          }
+          cmake build-uwp
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Create development signing certificate
@@ -89,7 +137,7 @@ jobs:
 
       - name: Build signed sideload package
         run: |
-          cmake --build build-uwp --config RelWithDebInfo --parallel 4 -- `
+          cmake --build build-uwp --config RelWithDebInfo --parallel 4 --target dusklight -- `
             /p:GenerateAppxPackageOnBuild=true /p:AppxBundle=Never `
             /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxPackageSigningEnabled=true `
             /p:PackageCertificateThumbprint=$env:UWP_CERT_THUMBPRINT
@@ -112,6 +160,17 @@ jobs:
           $index = Get-Content $dump -Raw
           foreach ($image in @('SplashScreen.png', 'Square150x150Logo.png', 'Square44x44Logo.png')) {
             if (!$index.Contains($image)) { throw "Resource index is missing $image" }
+          }
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
+          try {
+            $names = $zip.Entries | ForEach-Object FullName
+          } finally { $zip.Dispose() }
+          foreach ($required in @('dusklight.exe', 'initial_pipeline_cache.db',
+              'mods/dev.twilitrealm.randomizer/lib/windows-amd64/mod.dll')) {
+            if ($names -notcontains $required) { throw "Package is missing $required" }
+          }
+          if (@($names | Where-Object { $_ -like 'mods/*/lib/windows-amd64/mod.dll' }).Count -ne 3) {
+            throw 'Package does not contain all 3 bundled mod libraries'
           }
 
       - name: Upload installable package
