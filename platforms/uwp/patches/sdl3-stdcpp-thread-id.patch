@@ -1,0 +1,20 @@
+diff --git a/src/thread/stdcpp/SDL_systhread.cpp b/src/thread/stdcpp/SDL_systhread.cpp
+index c718d23dc..2b66fc52a 100644
+--- a/src/thread/stdcpp/SDL_systhread.cpp
++++ b/src/thread/stdcpp/SDL_systhread.cpp
+@@ -46,7 +46,14 @@ bool SDL_SYS_CreateThread(SDL_Thread *thread,
+ {
+     try {
+         // !!! FIXME: no way to set a thread stack size here.
+-        thread->handle = (void *)new std::thread(RunThread, thread);
++        std::thread *cpp_thread = new std::thread(RunThread, thread);
++        thread->handle = (void *)cpp_thread;
++
++        // SDL_RunThread no longer records the ID, so each backend must (matches SDL_GetCurrentThreadID).
++        const std::thread::id cpp_thread_id = cpp_thread->get_id();
++        SDL_ThreadID thread_id{};
++        SDL_memcpy(&thread_id, &cpp_thread_id, sizeof(std::thread::id));
++        thread->threadid = thread_id;
+         return true;
+     } catch (std::system_error &ex) {
+         return SDL_SetError("unable to start a C++ thread: code=%d; %s", ex.code().value(), ex.what());

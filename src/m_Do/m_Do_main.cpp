@@ -35,12 +35,6 @@
 #include "m_Do/m_Do_printf.h"
 #include "m_Do/m_Do_ext2.h"
 #include <cstring>
-#ifdef AURORA_WINDOWS_STORE
-#include <atomic>
-#include <chrono>
-#include <intrin.h>
-#include <thread>
-#endif
 
 #include "dusk/app_info.hpp"
 #include "dusk/audio/DuskAudioSystem.h"
@@ -193,42 +187,6 @@ bool launchUILoop() {
     return dusk::IsRunning;
 }
 
-#ifdef AURORA_WINDOWS_STORE
-// ponytail: temporary Xbox startup-hang probe; delete once the stall is found.
-static std::atomic<const char*> sLoopStep{"start"};
-static std::atomic<u32> sLoopTick{0};
-static u32 sLoopFrame = 0;
-#define LOOP_STEP(name)                                                                            \
-    do {                                                                                           \
-        sLoopStep = name;                                                                          \
-        sLoopTick++;                                                                               \
-        if (sLoopFrame < 12) {                                                                     \
-            DuskLog.debug("[LOOP] frame={} {}", sLoopFrame, name);                                 \
-        }                                                                                          \
-    } while (0)
-
-static void startLoopWatchdog() {
-    std::thread([] {
-        u32 last = ~0u;
-        int still = 0;
-        while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            const u32 now = sLoopTick;
-            if (now != last) {
-                last = now;
-                still = 0;
-            } else if (++still == 30) {
-                DuskLog.error("[LOOP] watchdog: main loop stalled 30s after '{}'; failing fast for a dump",
-                    sLoopStep.load());
-                __fastfail(7);  // FAST_FAIL_FATAL_APP_EXIT: WER captures every thread's stack.
-            }
-        }
-    }).detach();
-}
-#else
-#define LOOP_STEP(name) do {} while (0)
-#endif
-
 void main01(void) {
     OS_REPORT("\x1b[m");
 
@@ -268,9 +226,6 @@ void main01(void) {
     OSReport("Entering Main Loop (main01)...\n");
 
     dusk::game_clock::initialize();
-#ifdef AURORA_WINDOWS_STORE
-    startLoopWatchdog();
-#endif
 
     do {
         // 1. Update Window Events
@@ -314,22 +269,18 @@ void main01(void) {
         }
 
         eventsDone:;
-        LOOP_STEP("aurora_update");
 
         if (!aurora_begin_frame()) {
             DuskLog.debug("aurora_begin_frame returned false, skipping draw this frame");
             continue;
         }
-        LOOP_STEP("aurora_begin_frame");
 
         VIWaitForRetrace();
-        LOOP_STEP("VIWaitForRetrace");
 
         dusk::lastFrameAuroraStats = *aurora_get_stats();
         mDoGph_gInf_c::updateRenderSize();
 
         dusk::ui::update();
-        LOOP_STEP("ui::update");
 
         const auto timing = dusk::game_clock::advance();
         if (timing.separatePresentation) {
@@ -349,10 +300,8 @@ void main01(void) {
                     dusk::gyro::read(dusk::game_clock::kSimPeriod);
                     dusk::processGameCombos();
                     fapGm_Execute();
-                    LOOP_STEP("sim fapGm_Execute");
                     dusk::processCameraCommands();
                     mDoAud_Execute();
-                    LOOP_STEP("sim mDoAud_Execute");
                     dusk::game_clock::commit_sim_tick();
                 }
             }
@@ -360,9 +309,7 @@ void main01(void) {
             const float step = timing.interpolating ? dusk::game_clock::sample_interpolation_step() : 1.0f;
             dusk::interp::begin_presentation(step);
             fpcM_DrawIterater((fpcM_DrawIteraterFunc)fpcM_Draw);
-            LOOP_STEP("fpcM_DrawIterater");
             cAPIGph_Painter();
-            LOOP_STEP("cAPIGph_Painter");
             dusk::interp::end_presentation();
         } else {
             dusk::interp::begin_frame(0.0f);
@@ -377,16 +324,13 @@ void main01(void) {
             // EXECUTE GAME LOGIC & RENDER
             // This calls mDoGph_Painter -> JFWDisplay -> GX Functions
             fapGm_Execute();
-            LOOP_STEP("fapGm_Execute");
             dusk::processCameraCommands();
 
             mDoAud_Execute();
-            LOOP_STEP("mDoAud_Execute");
             dusk::game_clock::commit_sim_tick();
         }
 
         aurora_end_frame();
-        LOOP_STEP("aurora_end_frame");
 
         FrameMark;
 
@@ -416,10 +360,6 @@ void main01(void) {
         } else {
             main_loop_limiter.Reset();
         }
-        LOOP_STEP("frame_limiter");
-#ifdef AURORA_WINDOWS_STORE
-        sLoopFrame++;
-#endif
     } while (dusk::IsRunning);
 
     exit:;

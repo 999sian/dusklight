@@ -37,6 +37,30 @@ jobs:
           ref: 810cdcb672383045a8b03d1d55bb535352d7d46f
           path: build/uwp-dep
 
+      # uwp-dep's SDL3 3.4.16 never sets SDL thread IDs with its stdcpp thread backend, which
+      # deadlocks WASAPI on the first audio open. Rebuild that exact source with the fix.
+      - name: Check out pinned SDL3-uwp source
+        uses: actions/checkout@v6
+        with:
+          repository: SternXD/SDL3-uwp
+          ref: ddd5d4f99a26ac95d4620ccf489c07fcf5f08636
+          path: build/sdl3-uwp
+
+      - name: Build patched SDL3
+        run: |
+          $src = Join-Path $env:GITHUB_WORKSPACE 'build/sdl3-uwp'
+          git -C $src apply (Join-Path $env:GITHUB_WORKSPACE 'platforms/uwp/patches/sdl3-stdcpp-thread-id.patch')
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          msbuild (Join-Path $src 'VisualC-WinRT/SDL-UWP.vcxproj') /m /p:Configuration=Release /p:Platform=x64 `
+            /p:PlatformToolset=v143 /p:ApplicationTypeRevision=10.0 "/p:SolutionDir=$src/VisualC-WinRT/"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $dep = Join-Path $env:GITHUB_WORKSPACE 'build/uwp-dep/x64'
+          foreach ($file in @(@('SDL3.dll', 'bin'), @('SDL3.lib', 'lib'))) {
+            $built = @(Get-ChildItem (Join-Path $src 'VisualC-WinRT') -Recurse -Filter $file[0])
+            if ($built.Count -ne 1) { throw "Expected one built $($file[0]), found $($built.Count)" }
+            Copy-Item $built[0].FullName (Join-Path $dep $file[1]) -Force
+          }
+
       - name: Assign a unique development package revision
         run: |
           $revision = [int]$env:GITHUB_RUN_NUMBER
