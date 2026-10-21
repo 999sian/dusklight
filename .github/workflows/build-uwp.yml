@@ -1,0 +1,78 @@
+name: Build Xbox UWP (experimental)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [xbox-one-s-uwp]
+
+permissions:
+  contents: read
+
+jobs:
+  uwp:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - name: Configure game libraries
+        run: |
+          cmake -S . -B build/game -G Ninja `
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
+            -DDUSK_UWP=ON -DDUSK_ENABLE_DISCORD=OFF `
+            -DAURORA_UWP_DEP_TAG=ae39aa004ae127bd00f8262d28b401f8e4ed8728
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Compile game libraries
+        run: cmake --build build/game --parallel 4
+
+      - name: Configure UWP package
+        run: |
+          cmake -S platforms/uwp -B build-uwp -G "Visual Studio 17 2022" -A x64 `
+            -DDUSK_DIR="$env:GITHUB_WORKSPACE/build/game"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Create development signing certificate
+        run: |
+          $cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=odolwa' `
+            -KeyUsage DigitalSignature -FriendlyName 'Dusklight development' `
+            -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3','2.5.29.19={text}')
+          "UWP_CERT_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+
+      - name: Build signed sideload package
+        run: |
+          cmake --build build-uwp --config RelWithDebInfo --parallel 4 -- `
+            /p:GenerateAppxPackageOnBuild=true /p:AppxBundle=Never `
+            /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxPackageSigningEnabled=true `
+            /p:PackageCertificateThumbprint=$env:UWP_CERT_THUMBPRINT
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $packages = @(Get-ChildItem build-uwp -Recurse -Include *.appx,*.msix,*.appxbundle,*.msixbundle)
+          if (!$packages.Count) { throw 'Build succeeded without an installable UWP package.' }
+
+      - name: Upload installable package
+        uses: actions/upload-artifact@v7
+        with:
+          name: dusklight-uwp-experimental-x64
+          path: build-uwp/**/AppPackages/**
+          if-no-files-found: error
+
+      - name: Upload configure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: uwp-build-diagnostics
+          path: |
+            build/**/CMakeConfigureLog.yaml
+            build-uwp/**/CMakeConfigureLog.yaml

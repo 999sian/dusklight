@@ -2,6 +2,8 @@ name: Build
 
 on:
   push:
+    branches-ignore:
+      - xbox-one-s-uwp
     paths-ignore:
       - '*.md'
       - '*LICENSE'
