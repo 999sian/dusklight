@@ -65,6 +65,7 @@ public:
     ~ModelBindings();
     ModelBindings(const ModelBindings&) = delete;
     ModelBindings& operator=(const ModelBindings&) = delete;
+    void reset();
     void capture(J3DMaterial* material);
     void apply();
     void restore();

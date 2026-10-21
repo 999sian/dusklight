@@ -63,7 +63,8 @@ bool has_recording_data(const Recording& recording) {
 }
 
 void clear_replacements() {
-    g_replacements.clear();
+    // Unlike clear(), full-range erase retains Abseil's backing allocation.
+    g_replacements.erase(g_replacements.begin(), g_replacements.end());
 }
 
 void interpolate_replacements() {
@@ -108,7 +109,7 @@ void clear_interpolation_history() {
     s_syncPresentation = false;
     s_previousRecording = {};
     s_currentRecording = {};
-    clear_replacements();
+    g_replacements = {};
     clear_callbacks();
     dusk::interp::camera_invalidate_snapshots();
     dusk::interp::clear_owned_samples();
@@ -169,8 +170,9 @@ void begin_record() {
     }
 
     s_syncPresentation = false;
-    s_previousRecording = std::move(s_currentRecording);
-    s_currentRecording = {};
+    s_previousRecording.matrix_values.swap(s_currentRecording.matrix_values);
+    s_currentRecording.matrix_values.erase(s_currentRecording.matrix_values.begin(),
+                                          s_currentRecording.matrix_values.end());
     s_recording = true;
     s_replacementsActive = false;
     clear_replacements();

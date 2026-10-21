@@ -22,6 +22,21 @@
 namespace dusk::interp::material {
 
 namespace {
+struct Recording {
+    J3DModel* model = nullptr;
+    ModelBindings bindings;
+};
+
+struct Recordings {
+    std::vector<std::shared_ptr<Recording>> entries;
+    size_t next = 0;
+};
+
+Recordings& recordings() {
+    static Recordings stored;
+    return stored;
+}
+
 struct ViewProjection {
     f32 scaleS, scaleT, transS, transT;
 
@@ -134,6 +149,8 @@ void swap_frames(J3DAnmBase* resource, Frames& frames) {
 }
 
 void clear() {
+    recordings().entries.clear();
+    recordings().next = 0;
     tables().controllers.clear();
     tables().resources.clear();
     tables().projections.clear();
@@ -141,6 +158,7 @@ void clear() {
 }
 
 void prune() {
+    recordings().next = 0;
     tables().projections.clear();
     tables().lightViews.clear();
     const uint64_t tick = sim_tick_seq();
@@ -356,6 +374,31 @@ struct ModelBindings::State {
 ModelBindings::ModelBindings() : m_state(std::make_unique<State>()) {}
 ModelBindings::~ModelBindings() = default;
 
+void ModelBindings::reset() {
+    std::apply([](auto&... values) { (values.entries.clear(), ...); }, m_state->values);
+    m_state->animations.clear();
+    m_state->resources.clear();
+    m_state->projections.clear();
+    m_state->lights.clear();
+}
+
+namespace {
+std::shared_ptr<Recording> acquire_recording() {
+    auto& pool = recordings();
+    // Callback owners must release a snapshot before any captured pointers are reset.
+    while (pool.next < pool.entries.size() && pool.entries[pool.next].use_count() != 1) {
+        ++pool.next;
+    }
+    if (pool.next == pool.entries.size()) {
+        pool.entries.push_back(std::make_shared<Recording>());
+    }
+    auto recording = pool.entries[pool.next++];
+    recording->bindings.reset();
+    recording->model = nullptr;
+    return recording;
+}
+}  // namespace
+
 void ModelBindings::capture(J3DMaterial* material) {
     auto& state = *m_state;
     if (!state.capture(material)) {
@@ -535,12 +578,7 @@ void record_model(J3DModel* model) {
         return;
     }
 
-    struct Recording {
-        J3DModel* model;
-        ModelBindings bindings;
-    };
-
-    auto recording = std::make_shared<Recording>();
+    auto recording = acquire_recording();
     recording->model = model;
     J3DModelData* data = model->getModelData();
     for (u16 i = 0; i < data->getMaterialNum(); ++i) {

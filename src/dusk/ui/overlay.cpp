@@ -1,4 +1,5 @@
 #include "overlay.hpp"
+#include "overlay_attributes.hpp"
 
 #include "controller_config.hpp"
 #include "popover.hpp"
@@ -276,21 +277,21 @@ void Overlay::update() {
     if (mFpsCounter != nullptr) {
         if (getSettings().video.enableFpsOverlay.getValue()) {
             const int idx = getSettings().video.fpsOverlayCorner.getValue();
-            mFpsCounter->SetAttribute("open", "");
-            mFpsCounter->RemoveProperty(Rml::PropertyId::Bottom);
-            mFpsCounter->SetAttribute("corner", kFpsCorners[idx]);
+            detail::set_overlay_attribute(*mFpsCounter, "open", "");
+            detail::set_overlay_attribute(*mFpsCounter, "corner", kFpsCorners[idx]);
 
             if (idx == 2) {
                 if (mPipelineProgress && mPipelineProgress->GetAttribute("open")) {
                     // 12 (height of pipeline box off bottom) + height of pipeline box + 3 (padding
                     // space)
-                    mFpsCounter->SetProperty(Rml::PropertyId::Bottom,
-                        Rml::Property(15 + mPipelineProgress->GetOffsetHeight(), Rml::Unit::PX));
+                    detail::set_overlay_bottom(
+                        *mFpsCounter, 15 + mPipelineProgress->GetOffsetHeight());
                 } else {
                     // Return fps counter to default height off the bottom
-                    mFpsCounter->SetProperty(
-                        Rml::PropertyId::Bottom, Rml::Property(12, Rml::Unit::PX));
+                    detail::set_overlay_bottom(*mFpsCounter, 12.f);
                 }
+            } else {
+                detail::set_overlay_bottom(*mFpsCounter, std::nullopt);
             }
 
             const Uint64 perfFreq = SDL_GetPerformanceFrequency();
@@ -507,12 +508,12 @@ void Overlay::update_pipeline_progress() {
         set_text_content(
             mPipelineProgressLabel, fmt::format("Compiling {} {}", queuedPipelines, noun));
     }
-    mPipelineProgressBar->SetAttribute("value", progress);
+    detail::set_overlay_attribute(*mPipelineProgressBar, "value", progress);
 
     if (getSettings().backend.showPipelineCompilation.getValue() &&
         clock::now() >= mPipelineProgressStartTime + kPipelineProgressOpenDelay)
     {
-        mPipelineProgress->SetAttribute("open", "");
+        detail::set_overlay_attribute(*mPipelineProgress, "open", "");
     } else {
         mPipelineProgress->RemoveAttribute("open");
     }

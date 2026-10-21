@@ -1,5 +1,11 @@
 # Xbox One S: assessment of a 1080p / 60 FPS target
 
+**Implementation update, 22 October:** the user approved the seven concrete CPU
+candidates below. They are now implemented; see `xbox-one-s-cpu-implementation.md`
+for code changes and validation. The original review below records the rationale
+and limitations; statements that no optimization code existed describe that
+earlier assessment. Gameplay timing and sustained 1080p60 remain unmeasured.
+
 Assessed 21–22 October 2026 against branch `xbox-one-s-uwp-v2.0.3`, installed
 package 2.0.3.49, game source `9331db1`. This assessment is a source/configuration
 review; it introduces no performance code, build or gameplay measurement.
