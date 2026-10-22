@@ -1,0 +1,278 @@
+name: Build Xbox native mod ports (experimental)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SCCACHE_GHA_ENABLED: "true"
+
+jobs:
+  interpolation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Check interpolation storage and ownership
+        run: |
+          cmake -S tests/interp -B build-interp-tests -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-interp-tests --parallel 4 --target interpolation_storage_test
+          ctest --test-dir build-interp-tests --output-on-failure
+
+  uwp:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Check HUD regressions
+        run: |
+          cmake -S tests/ui-overlay -B build-overlay-tests -G "Visual Studio 17 2022" -A x64
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build-overlay-tests --config Release --parallel 4 --target overlay_test
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ctest --test-dir build-overlay-tests -C Release --output-on-failure
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Check native mod metadata retention
+        run: |
+          cmake -S sdk/tests/metadata -B build-metadata -G "Visual Studio 17 2022" -A x64
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build-metadata --config RelWithDebInfo --parallel 4
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ctest --test-dir build-metadata -C RelWithDebInfo --output-on-failure
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - uses: actions/checkout@v6
+        with:
+          repository: 999sian/dawnlight
+          ref: fe55df43f79fe19a0efc73ff266ecd4b882aa448
+          path: mods/dawnlight
+
+      - uses: actions/checkout@v6
+        with:
+          repository: 999sian/Roll-and-Sprint
+          ref: b81bec1948ff734f4de086a1ebae54941561fac7
+          path: mods/roll_and_sprint
+
+      - uses: actions/checkout@v6
+        with:
+          repository: 999sian/TP-CM-Controller-UI
+          ref: afb77cbf368b89eb7f2dc0b90b15a9cd417c6b24
+          path: mods/tp_classic_ui
+
+      - name: Check out pinned UWP dependencies
+        uses: actions/checkout@v6
+        with:
+          repository: SternXD/uwp-dep
+          ref: 810cdcb672383045a8b03d1d55bb535352d7d46f
+          path: build/uwp-dep
+
+      # uwp-dep's SDL3 3.4.16 never sets SDL thread IDs with its stdcpp thread backend, which
+      # deadlocks WASAPI on the first audio open. Rebuild that exact source with the fix.
+      - name: Check out pinned SDL3-uwp source
+        uses: actions/checkout@v6
+        with:
+          repository: SternXD/SDL3-uwp
+          ref: ddd5d4f99a26ac95d4620ccf489c07fcf5f08636
+          path: build/sdl3-uwp
+
+      - name: Build patched SDL3
+        run: |
+          $src = Join-Path $env:GITHUB_WORKSPACE 'build/sdl3-uwp'
+          git -C $src apply (Join-Path $env:GITHUB_WORKSPACE 'platforms/uwp/patches/sdl3-stdcpp-thread-id.patch')
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          msbuild (Join-Path $src 'VisualC-WinRT/SDL-UWP.vcxproj') /m /p:Configuration=Release /p:Platform=x64 `
+            /p:PlatformToolset=v143 /p:ApplicationTypeRevision=10.0 "/p:SolutionDir=$src/VisualC-WinRT/"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $dep = Join-Path $env:GITHUB_WORKSPACE 'build/uwp-dep/x64'
+          foreach ($file in @(@('SDL3.dll', 'bin'), @('SDL3.lib', 'lib'))) {
+            $built = @(Get-ChildItem (Join-Path $src 'VisualC-WinRT') -Recurse -Filter $file[0])
+            if ($built.Count -ne 1) { throw "Expected one built $($file[0]), found $($built.Count)" }
+            Copy-Item $built[0].FullName (Join-Path $dep $file[1]) -Force
+          }
+
+      - name: Assign a unique development package revision
+        run: |
+          $revision = 1000 + [int]$env:GITHUB_RUN_NUMBER
+          if ($revision -gt 65535) { throw "Package revision exceeds UWP limit" }
+          $path = Join-Path $env:GITHUB_WORKSPACE "platforms/uwp/Package.appxmanifest"
+          [xml]$manifest = Get-Content $path
+          $manifest.Package.Identity.Version = "2.0.3.$revision"
+          $manifest.Save($path)
+
+      # Upstream ships this backend-neutral pipeline list with desktop builds; Aurora compiles
+      # it in the background on first launch instead of stalling on first use.
+      - name: Fetch pinned initial pipeline cache
+        run: |
+          $extra = Join-Path $env:GITHUB_WORKSPACE 'build/uwp-extra'
+          New-Item -ItemType Directory -Force $extra | Out-Null
+          $zip = Join-Path $env:RUNNER_TEMP 'dusklight-win64.zip'
+          gh release download v2.0.3 --repo TwilitRealm/dusklight -p 'Dusklight-v2.0.3-win32-x86_64.zip' -O $zip
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile(
+              $archive.GetEntry('initial_pipeline_cache.db'), (Join-Path $extra 'initial_pipeline_cache.db'), $true)
+          } finally { $archive.Dispose() }
+          $hash = (Get-FileHash (Join-Path $extra 'initial_pipeline_cache.db') -Algorithm SHA256).Hash
+          if ($hash -ne '8C6C7D974946B71AEE7FA90542085B333AF9E2726B16DCCB34F808F2C0C5C2F0') {
+            throw "Unexpected initial pipeline cache hash $hash"
+          }
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Configure UWP application
+        run: |
+          cmake -S . -B build-uwp -G "Visual Studio 17 2022" -A x64 `
+            -DDUSK_UWP=ON -DDUSK_XBOX_MOD_PORTS=ON -DCMAKE_SYSTEM_NAME=WindowsStore -DCMAKE_SYSTEM_VERSION=10.0 `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
+            -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded `
+            -DAURORA_UWP_DEP_SOURCE_DIR="$env:GITHUB_WORKSPACE/build/uwp-dep" `
+            -DDUSK_UWP_EXTRA_CONTENT_DIR="$env:GITHUB_WORKSPACE/build/uwp-extra"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      # Mods link against the import library the game build emits, so they are built after
+      # it and staged pre-extracted into the package, where they load in place.
+      - name: Build game and bundled mods
+        run: |
+          cmake --build build-uwp --config RelWithDebInfo --parallel 4 --target dusklight -- `
+            /p:GenerateAppxPackageOnBuild=false
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build-uwp --config RelWithDebInfo --parallel 4 `
+            --target luau_runtime_package dawnlight_mod_package roll_and_sprint_package tp_classic_modern_controller_ui_package
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $mods = Join-Path $env:GITHUB_WORKSPACE 'build/uwp-extra/mods'
+          New-Item -ItemType Directory -Force $mods | Out-Null
+          $bundles = @(Get-ChildItem build-uwp/bundled_mods -Filter *.dusk)
+          if ($bundles.Count -ne 4) { throw "Expected four native mods, found $($bundles.Count)" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          foreach ($bundle in $bundles) {
+            $stage = Join-Path $env:RUNNER_TEMP $bundle.BaseName
+            Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($bundle.FullName, $stage)
+            $id = (Get-Content (Join-Path $stage 'mod.json') -Raw | ConvertFrom-Json).id
+            if (!(Test-Path (Join-Path $stage 'lib/windows-amd64/mod.dll'))) { throw "$id has no windows-amd64 mod.dll" }
+            switch ($id) {
+              'dev.bezide.dawnlight' { Copy-Item mods/dawnlight/LICENSE.md (Join-Path $stage 'LICENSE.md') }
+              'com.melonspeedruns.rollandsprint' { Copy-Item mods/roll_and_sprint/LICENSE (Join-Path $stage 'LICENSE') }
+              'org.dusklight.tp_classic_buttons' { Copy-Item mods/tp_classic_ui/LICENSE (Join-Path $stage 'LICENSE') }
+            }
+            Move-Item $stage (Join-Path $mods $id)
+          }
+          cmake build-uwp
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Create development signing certificate
+        run: |
+          $cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=odolwa' `
+            -KeyUsage DigitalSignature -FriendlyName 'Dusklight development' `
+            -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3','2.5.29.19={text}')
+          "UWP_CERT_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+
+      - name: Build signed sideload package
+        run: |
+          cmake --build build-uwp --config RelWithDebInfo --parallel 4 --target dusklight -- `
+            /p:GenerateAppxPackageOnBuild=true /p:AppxBundle=Never `
+            /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxPackageSigningEnabled=true `
+            /p:PackageCertificateThumbprint=$env:UWP_CERT_THUMBPRINT
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $packages = @(Get-ChildItem build-uwp -Recurse -Include *.appx,*.msix,*.appxbundle,*.msixbundle)
+          if (!$packages.Count) { throw 'Build succeeded without an installable UWP package.' }
+          $package = $packages | Where-Object { $_.Name -like 'dusklight_*.msix' } | Select-Object -First 1
+          if (!$package) { throw 'Dusklight MSIX was not produced.' }
+          # UWP packaging stages the executable before the post-build symbol embedding.
+          # Embed in the package layout and regenerate its block map and signature.
+          $layout = Join-Path $env:RUNNER_TEMP 'dusklight-symbol-layout'
+          makeappx unpack /p $package.FullName /d $layout /o
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & 'build-uwp/_deps/symgen/symgen-windows-x86_64.exe' manifest `
+            --pdb 'build-uwp/RelWithDebInfo/dusklight.pdb' --embed (Join-Path $layout 'dusklight.exe')
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          foreach ($stale in @('AppxSignature.p7x', 'AppxBlockMap.xml', 'AppxMetadata/CodeIntegrity.cat')) {
+            Remove-Item (Join-Path $layout $stale) -Force -ErrorAction SilentlyContinue
+          }
+          makeappx pack /d $layout /p $package.FullName /o
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          signtool sign /fd SHA256 /sha1 $env:UWP_CERT_THUMBPRINT $package.FullName
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
+          try {
+            $entry = $zip.GetEntry('resources.pri')
+            if (!$entry) { throw 'Package has no resource index.' }
+            $pri = Join-Path $env:RUNNER_TEMP 'dusklight-resources.pri'
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $pri, $true)
+          } finally { $zip.Dispose() }
+          $dump = Join-Path $env:RUNNER_TEMP 'dusklight-resources.xml'
+          makepri dump /if $pri /of $dump /o
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $index = Get-Content $dump -Raw
+          foreach ($image in @('SplashScreen.png', 'Square150x150Logo.png', 'Square44x44Logo.png')) {
+            if (!$index.Contains($image)) { throw "Resource index is missing $image" }
+          }
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
+          try {
+            $names = $zip.Entries | ForEach-Object FullName
+          } finally { $zip.Dispose() }
+          foreach ($required in @('dusklight.exe', 'initial_pipeline_cache.db',
+              'res/licenses/Dusklight-CC0.txt', 'res/licenses/Font-notices.txt',
+              'mods/dev.twilitrealm.luau/lib/windows-amd64/mod.dll',
+              'mods/dev.bezide.dawnlight/lib/windows-amd64/mod.dll',
+              'mods/com.melonspeedruns.rollandsprint/lib/windows-amd64/mod.dll',
+              'mods/org.dusklight.tp_classic_buttons/lib/windows-amd64/mod.dll')) {
+            if ($names -notcontains $required) { throw "Package is missing $required" }
+          }
+          if (@($names | Where-Object { $_ -like 'mods/*/lib/windows-amd64/mod.dll' }).Count -ne 4) {
+            throw 'Experimental package must contain exactly four native libraries'
+          }
+          $allowedArt = @{}
+          foreach ($folder in @('dev.bezide.dawnlight', 'org.dusklight.tp_classic_buttons')) {
+            $root = Join-Path $env:GITHUB_WORKSPACE "build/uwp-extra/mods/$folder/res"
+            Get-ChildItem $root -Recurse -File | Where-Object { $_.Extension -in @('.bti', '.bmd') } | ForEach-Object {
+              $relative = [IO.Path]::GetRelativePath((Join-Path $env:GITHUB_WORKSPACE 'build/uwp-extra'), $_.FullName).Replace('\', '/')
+              $allowedArt[$relative] = $true
+            }
+          }
+          $forbidden = @($names | Where-Object {
+            ($_ -match '(?i)\.(iso|gcm|rvz|wbfs|wia|gcz|ciso|wad|dol|rel|gci|raw|bti|bmd|brres|szs|arc|pfx|p12|key)$' -and !$allowedArt.ContainsKey($_)) -or
+            $_ -like 'mods/dev.twilitrealm.randomizer/*' -or
+            $_ -like 'mods/dev.twilitrealm.cosmetics/*' -or $_ -eq 'res/prelaunch-bg.png'
+          })
+          if ($forbidden.Count) {
+            throw "Package contains excluded game/private resources: $($forbidden -join ', ')"
+          }
+
+      - name: Upload installable package
+        uses: actions/upload-artifact@v7
+        with:
+          name: dusklight-native-mod-ports-experimental-x64
+          path: build-uwp/**/AppPackages/**
+          if-no-files-found: error
+
+      - name: Upload configure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: uwp-build-diagnostics
+          path: |
+            build/**/CMakeConfigureLog.yaml
+            build-uwp/**/CMakeConfigureLog.yaml

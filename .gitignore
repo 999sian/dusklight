@@ -69,3 +69,8 @@ mods/cosmetics/
 pipeline_cache.bin
 
 extract
+
+# Experimental native mod source checkouts
+mods/dawnlight/
+mods/roll_and_sprint/
+mods/tp_classic_ui/
