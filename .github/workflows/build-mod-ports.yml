@@ -199,7 +199,7 @@ jobs:
               if (!$section[0].executable) { "$name DATA" } else { $name }
             }
           } | Sort-Object -Unique)
-          if ($symbols.Count -ne 16384) { throw "Unexpected export count $($symbols.Count)" }
+          if ($symbols.Count -ne 30042) { throw "Unexpected export count $($symbols.Count)" }
           $definition = Join-Path $env:RUNNER_TEMP 'dusklight-base.def'
           @('LIBRARY dusklight.exe', 'EXPORTS') + $symbols | Set-Content $definition -Encoding ascii
           New-Item -ItemType Directory -Force build-uwp/RelWithDebInfo | Out-Null
