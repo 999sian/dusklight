@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 env:
   SCCACHE_GHA_ENABLED: "true"
@@ -64,7 +65,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: 999sian/dawnlight
-          ref: fe55df43f79fe19a0efc73ff266ecd4b882aa448
+          ref: 55d5ca9645c576648bccbfa62f484efe539844c2
           path: mods/dawnlight
 
       - uses: actions/checkout@v6
@@ -151,13 +152,46 @@ jobs:
             -DDUSK_UWP_EXTRA_CONTENT_DIR="$env:GITHUB_WORKSPACE/build/uwp-extra"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
-      # Mods link against the import library the game build emits, so they are built after
-      # it and staged pre-extracted into the package, where they load in place.
-      - name: Build game and bundled mods
+      - name: Reuse verified game binary and recover its import library
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          cmake --build build-uwp --config RelWithDebInfo --parallel 4 --target dusklight -- `
-            /p:GenerateAppxPackageOnBuild=false
+          git diff --quiet 046149e09884b44989b64f3b1ee0fd96c8ffbc66 -- src include libs extern sdk platforms/uwp/main.cpp
+          if ($LASTEXITCODE) { throw 'Host source changed; a full game build is required' }
+          $sourceRun = gh api repos/$env:GITHUB_REPOSITORY/actions/runs/39708398636 | ConvertFrom-Json
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ($sourceRun.conclusion -ne 'success' -or $sourceRun.head_sha -ne 'f21cc53050e3fd50154e25dd45f2f11d95c9e993') {
+            throw 'Unexpected base packaging run'
+          }
+          gh run download 39708398636 --repo $env:GITHUB_REPOSITORY -n dusklight-public-x64 -D base-package
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $packages = @(Get-ChildItem base-package -Recurse -Filter *.msix)
+          if ($packages.Count -ne 1) { throw 'Expected one verified base package' }
+          if ((Get-FileHash $packages[0].FullName).Hash -ne '8E3A128890FAC35E841536739D7C2332CDBA34906F01096DC7DFEBED9BA4A319') {
+            throw 'Base MSIX hash mismatch'
+          }
+          $layout = Join-Path $env:RUNNER_TEMP 'mod-port-layout'
+          makeappx unpack /p $packages[0].FullName /d $layout /o
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $exe = Join-Path $layout 'dusklight.exe'
+          if ((Get-FileHash $exe).Hash -ne '325ED4ED0520BC4E82EA01D7222534C262F75B6E6B900C91C1DF2ADBD4DECDEF') {
+            throw 'Base game hash mismatch'
+          }
+          $exports = @(& dumpbin /nologo /exports $exe)
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $symbols = @($exports | ForEach-Object {
+            if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+(?:[0-9A-F]{8}\s+)?(\S+)') { $Matches[1] }
+          } | Sort-Object -Unique)
+          if ($symbols.Count -lt 10000 -or $symbols.Count -gt 60000) { throw "Unexpected export count $($symbols.Count)" }
+          $definition = Join-Path $env:RUNNER_TEMP 'dusklight-base.def'
+          @('LIBRARY dusklight.exe', 'EXPORTS') + $symbols | Set-Content $definition -Encoding ascii
+          New-Item -ItemType Directory -Force build-uwp/RelWithDebInfo | Out-Null
+          lib /nologo /def:$definition /machine:x64 /name:dusklight.exe /out:build-uwp/RelWithDebInfo/dusklight_imports.lib
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "PORT_LAYOUT=$layout" >> $env:GITHUB_ENV
+
+      - name: Build bundled mod ports
+        run: |
           cmake --build build-uwp --config RelWithDebInfo --parallel 4 `
             --target luau_runtime_package dawnlight_mod_package roll_and_sprint_package tp_classic_modern_controller_ui_package
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -190,51 +224,39 @@ jobs:
             -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3','2.5.29.19={text}')
           "UWP_CERT_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
 
-      - name: Build signed sideload package
+      - name: Package ports with verified game and sign
         run: |
-          cmake --build build-uwp --config RelWithDebInfo --parallel 4 --target dusklight -- `
-            /p:GenerateAppxPackageOnBuild=true /p:AppxBundle=Never `
-            /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxPackageSigningEnabled=true `
-            /p:PackageCertificateThumbprint=$env:UWP_CERT_THUMBPRINT
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          $packages = @(Get-ChildItem build-uwp -Recurse -Include *.appx,*.msix,*.appxbundle,*.msixbundle)
-          if (!$packages.Count) { throw 'Build succeeded without an installable UWP package.' }
-          $package = $packages | Where-Object { $_.Name -like 'dusklight_*.msix' } | Select-Object -First 1
-          if (!$package) { throw 'Dusklight MSIX was not produced.' }
-          # UWP packaging stages the executable before the post-build symbol embedding.
-          # Embed in the package layout and regenerate its block map and signature.
-          $layout = Join-Path $env:RUNNER_TEMP 'dusklight-symbol-layout'
-          makeappx unpack /p $package.FullName /d $layout /o
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          & 'build-uwp/_deps/symgen/symgen-windows-x86_64.exe' manifest `
-            --pdb 'build-uwp/RelWithDebInfo/dusklight.pdb' --embed (Join-Path $layout 'dusklight.exe')
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $layout = $env:PORT_LAYOUT
+          Copy-Item build/uwp-extra/mods/* (Join-Path $layout 'mods') -Recurse -Force
+          [xml]$manifest = Get-Content (Join-Path $layout 'AppxManifest.xml')
+          if ($manifest.Package.Identity.Name -ne 'Dusklight' -or $manifest.Package.Identity.Version -ne '2.0.3.54') {
+            throw 'Unexpected base identity'
+          }
+          $version = "2.0.3.$(1000 + [int]$env:GITHUB_RUN_NUMBER)"
+          $manifest.Package.Identity.Version = $version
+          $manifest.Save((Join-Path $layout 'AppxManifest.xml'))
           foreach ($stale in @('AppxSignature.p7x', 'AppxBlockMap.xml', 'AppxMetadata/CodeIntegrity.cat')) {
             Remove-Item (Join-Path $layout $stale) -Force -ErrorAction SilentlyContinue
           }
-          makeappx pack /d $layout /p $package.FullName /o
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          signtool sign /fd SHA256 /sha1 $env:UWP_CERT_THUMBPRINT $package.FullName
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $zip = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
-          try {
-            $entry = $zip.GetEntry('resources.pri')
-            if (!$entry) { throw 'Package has no resource index.' }
-            $pri = Join-Path $env:RUNNER_TEMP 'dusklight-resources.pri'
-            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $pri, $true)
-          } finally { $zip.Dispose() }
-          $dump = Join-Path $env:RUNNER_TEMP 'dusklight-resources.xml'
-          makepri dump /if $pri /of $dump /o
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          $index = Get-Content $dump -Raw
-          foreach ($image in @('SplashScreen.png', 'Square150x150Logo.png', 'Square44x44Logo.png')) {
-            if (!$index.Contains($image)) { throw "Resource index is missing $image" }
+          if ((Get-FileHash (Join-Path $layout 'dusklight.exe')).Hash -ne '325ED4ED0520BC4E82EA01D7222534C262F75B6E6B900C91C1DF2ADBD4DECDEF') {
+            throw 'Game executable changed'
           }
-          $zip = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
-          try {
-            $names = $zip.Entries | ForEach-Object FullName
-          } finally { $zip.Dispose() }
+          New-Item -ItemType Directory -Force port-package | Out-Null
+          $msix = Join-Path $env:GITHUB_WORKSPACE "port-package/Dusklight_${version}_x64.msix"
+          makeappx pack /d $layout /p $msix /o
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          signtool sign /fd SHA256 /sha1 $env:UWP_CERT_THUMBPRINT $msix
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Export-Certificate -Cert (Get-Item "Cert:\CurrentUser\My\$env:UWP_CERT_THUMBPRINT") -FilePath "port-package/Dusklight_${version}_x64.cer" | Out-Null
+          $base = @(Get-ChildItem base-package -Recurse -Filter *.msix)[0]
+          Copy-Item (Join-Path $base.DirectoryName 'Dependencies') port-package -Recurse
+          @{base_run=39708398636; game_source='046149e09884b44989b64f3b1ee0fd96c8ffbc66';
+            game_sha256=(Get-FileHash (Join-Path $layout 'dusklight.exe')).Hash;
+            mod_build_source=$env:GITHUB_SHA; package_sha256=(Get-FileHash $msix).Hash} |
+            ConvertTo-Json | Set-Content port-package/packaging-provenance.json
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($msix)
+          try { $names = @($zip.Entries | ForEach-Object FullName) } finally { $zip.Dispose() }
           foreach ($required in @('dusklight.exe', 'initial_pipeline_cache.db',
               'res/licenses/Dusklight-CC0.txt', 'res/licenses/Font-notices.txt',
               'mods/dev.twilitrealm.luau/lib/windows-amd64/mod.dll',
@@ -267,7 +289,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: dusklight-native-mod-ports-experimental-x64
-          path: build-uwp/**/AppPackages/**
+          path: port-package/**
           if-no-files-found: error
 
       - name: Upload configure diagnostics
