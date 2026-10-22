@@ -1,6 +1,9 @@
 # Dusklight for Xbox One S — experimental UWP port
 
-An unofficial Xbox Developer Mode port of
+An unofficial fork of
+[XboxEmulationHub's dusklight-uwp](https://github.com/XboxEmulationHub/dusklight-uwp),
+building on its Xbox UWP port with updates and Xbox One S compatibility and
+optimization work. The original game project is
 [Twilit Realm's Dusklight](https://github.com/TwilitRealm/dusklight), a
 reverse-engineered reimplementation of Twilight Princess. This fork is not
 affiliated with Nintendo, Microsoft or the upstream Dusklight team.
@@ -186,7 +189,8 @@ terms or grant rights to Nintendo game assets or trademarks. See
 [release-content audit](docs/release-content-audit.md). This audit is a technical
 inventory, not a guarantee of the legal status of every inherited file.
 
-Thanks to [Twilit Realm](https://github.com/TwilitRealm/dusklight),
+Thanks to [XboxEmulationHub for the original UWP port](https://github.com/XboxEmulationHub/dusklight-uwp),
+[Twilit Realm](https://github.com/TwilitRealm/dusklight),
 [zeldaret/tp](https://github.com/zeldaret/tp),
 [Aurora](https://github.com/encounter/aurora),
 [SternXD's UWP dependencies](https://github.com/SternXD/uwp-dep), and all
