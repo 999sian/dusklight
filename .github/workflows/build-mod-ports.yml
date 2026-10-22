@@ -2,6 +2,8 @@ name: Build Xbox native mod ports (experimental)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [xbox-mod-ports]
 
 permissions:
   contents: read
