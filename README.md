@@ -111,8 +111,8 @@ in graphics settings.
 These mods are bundled in **experimental package 2.0.3.1006**, separate from
 public release 2.0.3.54. Desktop mod downloads will not work on Xbox.
 
-1. Sign in to GitHub and open the [successful build](https://github.com/999sian/dusklight/actions/runs/39714675293).
-   Under **Artifacts**, download `dusklight-native-mod-ports-experimental-x64`.
+1. Open the [Xbox mod ports download](https://github.com/999sian/dusklight/releases/tag/v2.0.3-xbox-mod-ports.1006).
+   Under **Assets**, download `Dusklight-Xbox-2.0.3.1006-Mod-Ports-x64.zip`.
 2. Extract the ZIP and install its `.msix` through Device Portal using the
    steps above. Back up first; **do not uninstall**.
 3. Open **Mods**. Enable **Dawnlight** or **Roll and Sprint**, and disable the
@@ -125,6 +125,11 @@ All three passed separate 30-second startup tests on Xbox One S. Saves and
 user mods were checked unchanged. Gameplay and mod combinations still need
 testing. Dawnlight's optional boss-rush music is unavailable without its
 `mods/temp.ast` file. Updates require a new signed app package.
+
+Developer UWP bundles: [Dawnlight](https://github.com/999sian/dawnlight/releases/tag/v5.1.0-xbox.1),
+[Roll and Sprint](https://github.com/999sian/Roll-and-Sprint/releases/tag/v1.1.0-xbox.1),
+[Controller UI](https://github.com/999sian/TP-CM-Controller-UI/releases/tag/v1.4.0-xbox.1).
+These cannot be installed by copying them into Xbox app data.
 
 [Package details and test results](https://github.com/999sian/dusklight/blob/xbox-mod-ports/docs/xbox-native-mod-ports.md).
 
