@@ -106,11 +106,11 @@ an Xbox shader port. Large packs may exceed available storage or memory.
 
 | Mod / type | Xbox status | Included in public release? |
 | --- | --- | --- |
-| **Luau Support 1.0** | Bundled UWP runtime executed a script and update callback in a previous Xbox test; individual mods still need testing. | Yes |
+| **[Luau Support 1.0](https://github.com/999sian/dusklight/tree/xbox-one-s-uwp-v2.0.3/mods/luau_runtime)** | Bundled UWP runtime executed a script and update callback in a previous Xbox test; individual mods still need testing. | Yes |
 | **Play as Dark Link 1.0.0**, by LoadingError | Original asset/Luau package activated after manual transfer. In-game appearance unverified; browser permission error unresolved. This is the appearance mod, not the native Dark Link boss mod. | No |
 | **TP Definitive Edition+ 2.1 texture archives** | Original DDS/PNG data transferred to internal storage; startup registered 4,730 textures. Full visual, memory and FPS checks pending. | No |
 | **Cosmetics** | Initialized in a previous private build; features not fully tested. Excluded because its repository has no license or redistribution terms. | No |
-| **Randomizer** | Xbox source fixes exist and initialization passed in a previous private build. Bundled texture redistribution rights remain unresolved; gameplay unverified. | No |
+| **[Randomizer — Xbox fork](https://github.com/999sian/dusklight-randomizer/tree/xbox-one-s-v2.0.3)** | Xbox source fixes exist and initialization passed in a previous private build. Bundled texture redistribution rights remain unresolved; gameplay unverified. | No |
 | **Twilit Essentials 2.8.4** | Current source was not available in our investigation; released desktop DLL has unsupported dependencies/imports. No working Xbox port. | No |
 | **Dawnlight 5.1.0** | Public source exists, but needs a UWP port and matching game exports. Not installed or ported. | No |
 | **Other native DLL mods** | Downloaded DLLs in app data cannot load through the current UWP loader. They need compatible source, a UWP rebuild and signed bundling. Windows x64 alone is insufficient. | No |

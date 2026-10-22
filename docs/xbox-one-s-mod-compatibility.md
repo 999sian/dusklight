@@ -10,6 +10,18 @@ at `6bd8000`; the other tested mods' source/content was not modified.
 See the [README](../README.md#mods-installation-and-compatibility) for installation,
 mod status and fork provenance. Browser installation permissions remain unresolved.
 
+## Xbox mod source links
+
+| Mod | Source used for Xbox | Verified status / availability |
+| --- | --- | --- |
+| Randomizer | [Our Xbox fork — `xbox-one-s-v2.0.3`](https://github.com/999sian/dusklight-randomizer/tree/xbox-one-s-v2.0.3), commit `6bd8000` | Endian/MSVC fixes; initialized in private package 49. Gameplay unverified. Excluded from the public package pending bundled texture rights review. |
+| Luau Support | [Runtime in our Dusklight fork](https://github.com/999sian/dusklight/tree/xbox-one-s-uwp-v2.0.3/mods/luau_runtime) | Bundled UWP build; script and update callback executed on Xbox. Mod source unchanged; host/SDK compatibility work is in the main fork. Individual mods need testing. |
+
+Cosmetics initialized in an earlier private build, but its source was unchanged
+and no separate fork was published; it is excluded pending redistribution terms.
+Dark Link and TPDE+ used unchanged author content, so we have no modified forks
+to link. These source links do not make downloaded desktop DLLs Xbox-compatible.
+
 ## Earlier private-build test history
 
 The target is the existing online browser, downloads and broad mod support.
