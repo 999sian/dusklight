@@ -87,6 +87,8 @@ A `.dusk` file is a package format, not an Xbox compatibility guarantee.
 **The browser's reported installation-permission error is still unresolved.**
 Manual placement has activated asset/Luau packages, but does not fix that error.
 
+For per-mod steps, see **[How to use mods on Xbox](docs/xbox-one-s-mod-compatibility.md#how-to-use-mods-on-xbox)**: bundled Luau, manual Dark Link installation, loose texture packs and the requirements for a Randomizer package.
+
 For an asset or Luau mod obtained from its author:
 
 1. Back up saves and settings, then stop Dusklight.

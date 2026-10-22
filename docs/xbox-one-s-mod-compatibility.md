@@ -22,6 +22,114 @@ and no separate fork was published; it is excluded pending redistribution terms.
 Dark Link and TPDE+ used unchanged author content, so we have no modified forks
 to link. These source links do not make downloaded desktop DLLs Xbox-compatible.
 
+## How to use mods on Xbox
+
+### 1. Install the Xbox app and find the active data folder
+
+Install the [Xbox release](https://github.com/999sian/dusklight/releases/tag/v2.0.3-xbox-one-s.54)
+through Device Portal as described in the [setup guide](../README.md#download-and-install).
+Launch once, then stop the app before copying files. Back up settings and saves.
+
+In Device Portal's file explorer, select Dusklight's app data and open
+`LocalState\TwilitRealm\Dusklight`. This is the default data folder. If you
+previously configured a custom data folder, use that folder instead; for
+example `D:\DevelopmentFiles\DusklightData`. Do not copy mods into both places
+or into the installed application directory.
+
+### 2. Luau Support and Play as Dark Link
+
+**Luau Support is already inside the public Xbox MSIX.** You do not need to
+clone its source, build it, or download a desktop runtime DLL.
+
+1. Launch Dusklight, open **Mods** and check that **Luau Support** is listed.
+   Enable it if disabled. If missing, check the installed package version;
+   the public 2.0.3.54 package includes it.
+2. Obtain **Play as Dark Link 1.0.0** by **LoadingError** from the author's
+   listing in the built-in browser/catalog. Its ID is `com.loadingerror.dink`
+   and its runtime requirement is `dev.twilitrealm.luau@1.0`. The separate
+   native Dark Link boss mod is not interchangeable with it.
+3. If the browser installs it successfully, skip manual copying. If it reports
+   the known permission error, obtain the author's `.dusk` download on your
+   other device, stop Dusklight and upload that intact file through Device
+   Portal to `<active data folder>\mods\com.loadingerror.dink.dusk`.
+   Create `mods` if missing. Do not unzip the package or replace Luau's DLL.
+4. Relaunch, open **Mods**, enable **Play as Dark Link** if necessary and check
+   for dependency/error messages. Restart if requested by the UI, then load
+   your game to check the appearance. Our previous test confirmed activation,
+   not correct appearance throughout gameplay.
+
+Use the same process for other asset/Luau `.dusk` packages, checking each
+mod's dependencies. It does not work for downloaded native DLL packages.
+A source-code ZIP from GitHub's **Code → Download ZIP** is not an installable
+`.dusk` or MSIX.
+
+### 3. TPDE+ and other loose texture packs
+
+1. Obtain the pack from its author. For the tested TPDE+ release, use
+   <https://gamebanana.com/mods/714018> and follow the author's multi-archive
+   assembly order and selection instructions. Do not copy compressed archives
+   or desktop ReShade into the texture folder.
+2. With Dusklight stopped, copy the selected extracted DDS/PNG files beneath
+   `<active data folder>\texture_replacements\TPDE-plus-2.1\`, preserving
+   the texture filenames. For other packs, use a separate pack-name folder.
+   The tested TPDE+ selection occupies about 7.76 GB; allow additional space.
+3. For large transfers to a configured D: data folder, connect a compatible
+   file manager to `smb://<xbox-ip>/DevelopmentFiles` using your Xbox remote
+   access credentials. A Windows file manager can use
+   `\\<xbox-ip>\DevelopmentFiles`. Copy into the matching active data folder.
+4. Launch, enable **Enable Texture Replacements** in graphics settings, then
+   start the game. If troubleshooting memory use or performance, stop the app
+   and move the pack folder out of `texture_replacements`, retaining a backup.
+
+Texture registration at startup is confirmed for the tested selection;
+complete visual coverage and sustained gameplay performance are not.
+
+### 4. Randomizer: source fork, no public Xbox installer yet
+
+The [Randomizer Xbox branch](https://github.com/999sian/dusklight-randomizer/tree/xbox-one-s-v2.0.3)
+contains source fixes. **It cannot currently be added to public package
+2.0.3.54 by copying a `.dusk` or DLL into `mods`.** The earlier successful
+initialization used a UWP DLL bundled inside a signed private app package.
+Randomizer is excluded from the public build and its contents checks.
+
+For developers preparing a separately reviewed compatible package:
+
+1. Use this Dusklight Xbox branch and Randomizer source commit `6bd8000` from
+   the linked fork, rather than the upstream desktop build instructions.
+2. Integrate Randomizer into the host CMake build and build it against the
+   same game's import library, SDK, UWP toolchain and runtime. The earlier
+   integration is recorded in host commit
+   [`27dde3b`](https://github.com/999sian/dusklight/commit/27dde3be76eed6451916a441632a57812b23e577).
+3. A compatible package must stage the extracted bundle at
+   `mods/dev.twilitrealm.randomizer/` **inside the MSIX**, including its
+   `mod.json`, `lib/windows-amd64/mod.dll` and required resources, before
+   signing. It also needs the game's embedded symbol manifest. Copying only
+   the DLL into app data cannot substitute for this step.
+4. Resolve redistribution permission for the bundled textures before
+   publishing such a package. The current public workflow deliberately
+   rejects Randomizer; it is not a ready-made Randomizer build workflow.
+5. Back up app data, install a compatible signed package in place, then check
+   **Mods** for initialization/errors. Seed generation, starting a new
+   randomized game and save/load still need console testing; menu activation
+   alone does not establish a working playthrough.
+
+This is the required integration path, not a currently validated end-user
+build recipe. There is no supported Randomizer install step for the public
+release until a compatible package is available.
+
+### 5. If a mod fails
+
+Stop Dusklight and move the newly added `.dusk` or texture folder out of its
+search folder while retaining a backup, then relaunch. Do not uninstall or
+clear app data. Record the app version, mod version and full error message
+when reporting a problem; remove credentials from logs. An error from a
+bundled native mod requires a corrected app package rather than deleting
+files from the read-only installation.
+
+Cosmetics has no public Xbox package here pending redistribution terms.
+Current Twilit Essentials and Dawnlight are not ported; their desktop build
+instructions will not make them run on this UWP app.
+
 ## Earlier private-build test history
 
 The target is the existing online browser, downloads and broad mod support.
