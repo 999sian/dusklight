@@ -101,7 +101,32 @@ in graphics settings.
 | [TPDE+](https://gamebanana.com/mods/714018) | Startup loaded textures; gameplay/performance checks pending. Tested selection: 7.76 GB. |
 | [Randomizer — our Xbox fork](https://github.com/999sian/dusklight-randomizer/tree/xbox-one-s-v2.0.3) | Not installable in this public release. Needs signed app bundling; texture rights review pending. |
 | Cosmetics | Excluded pending redistribution terms. |
-| Twilit Essentials / Dawnlight | No working Xbox port here yet. |
+| [Dawnlight 5.1.0 — our Xbox fork](https://github.com/999sian/dawnlight/tree/xbox-one-s-v2.0.3) | Experimental package 2.0.3.1006; separate Xbox startup test passed. Gameplay unverified. |
+| [Roll and Sprint 1.1.0 — our Xbox fork](https://github.com/999sian/Roll-and-Sprint/tree/xbox-one-s-v2.0.3) | Experimental package 2.0.3.1006; separate Xbox startup test passed. Gameplay unverified. |
+| [TP Classic Modern Controller UI 1.4.0 — our Xbox fork](https://github.com/999sian/TP-CM-Controller-UI/tree/xbox-one-s-v2.0.3) | Experimental package 2.0.3.1006; separate Xbox startup test passed. In-game prompts unverified. |
+| Twilit Essentials | Current version has no compatible Xbox build here. |
+
+### Try the three new Xbox ports
+
+These mods are bundled in **experimental package 2.0.3.1006**, separate from
+public release 2.0.3.54. Desktop mod downloads will not work on Xbox.
+
+1. Sign in to GitHub and open the [successful build](https://github.com/999sian/dusklight/actions/runs/39714675293).
+   Under **Artifacts**, download `dusklight-native-mod-ports-experimental-x64`.
+2. Extract the ZIP and install its `.msix` through Device Portal using the
+   steps above. Back up first; **do not uninstall**.
+3. Open **Mods**. Enable **Dawnlight** or **Roll and Sprint**, and disable the
+   other. Both change sprinting; using them together is untested.
+4. Enable **TP Classic Modern Controller UI** and choose **Xbox** before
+   starting the game. Restart Dusklight if you change controller style later.
+5. Assign your controller to **Port 1**, then start the game.
+
+All three passed separate 30-second startup tests on Xbox One S. Saves and
+user mods were checked unchanged. Gameplay and mod combinations still need
+testing. Dawnlight's optional boss-rush music is unavailable without its
+`mods/temp.ast` file. Updates require a new signed app package.
+
+[Package details and test results](https://github.com/999sian/dusklight/blob/xbox-mod-ports/docs/xbox-native-mod-ports.md).
 
 The browser's permission error is unresolved. Use manual transfer for asset/Luau
 mods. Downloaded native DLL mods cannot load from app data.
@@ -112,8 +137,11 @@ do not uninstall.**
 
 [Randomizer Xbox build instructions](docs/xbox-one-s-randomizer-build.md).
 
-Only Randomizer's mod source was changed: float byte conversion, an MSVC build
-fix and a regression test. Its Xbox fork is linked above. Luau's source,
+Randomizer's changes cover float byte conversion, an MSVC build fix and a
+regression test. Dawnlight, Roll and Sprint and TP Classic Modern Controller UI
+also have Xbox forks, linked above: their builds use the Xbox host SDK and
+signed bundling; Dawnlight additionally excludes desktop-only touch/updater
+code and handles an MSVC build warning. Luau's source,
 Cosmetics, Dark Link and TPDE+ content were unchanged; compatibility work is in
 the host/SDK and our [Aurora](https://github.com/999sian/aurora/tree/xbox-one-s-v2.0.3)
 and [Borealis](https://github.com/999sian/borealis/tree/xbox-one-s-v2.0.3) library forks.
@@ -132,7 +160,10 @@ The public package excludes the upstream randomizer's bundled texture assets
 and the static gameplay-screenshot background pending asset-rights review.
 Cosmetics is excluded because its separate repository has no license or
 redistribution terms. These optional submodules are excluded from the release source.
-Dawnlight, Twilit Essentials, Dark Link and TPDE+ are **not bundled**. The
+Public release 2.0.3.54 does **not bundle** Dawnlight, Roll and Sprint,
+TP Classic Modern Controller UI, Twilit Essentials, Dark Link or TPDE+.
+The separate experimental 2.0.3.1006 package bundles Luau and the three new
+ports; it excludes Randomizer and Cosmetics. The
 built-in mod browser does not guarantee Xbox compatibility: desktop native
 DLLs generally need a UWP rebuild and inclusion in a signed package. Native
 DLLs downloaded into app data cannot simply be loaded as desktop mods.
