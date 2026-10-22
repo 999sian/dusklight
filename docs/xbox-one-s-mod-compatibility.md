@@ -74,10 +74,24 @@ A desktop download cannot add it to the public Xbox package.
 **Not available on this Xbox port yet.** The current desktop release will
 not load. It needs a compatible Xbox build; there are no working install steps.
 
-## Dawnlight
+## Dawnlight, Roll and Sprint, and TP Classic Modern Controller UI
 
-**Not available on this Xbox port yet.** Its desktop DLL will not load.
-An Xbox port is still required; there are no working install steps.
+These Xbox ports are included in **experimental package 2.0.3.1006**, separate
+from public release 2.0.3.54. Each passed a separate Xbox One S startup test;
+gameplay remains unverified. Do not copy their desktop DLLs into `mods/`.
+
+1. Follow the [experimental package download and install steps](../README.md#try-the-three-new-xbox-ports).
+2. Open **Mods**. Enable **Dawnlight** or **Roll and Sprint**; disable the other.
+3. For **TP Classic Modern Controller UI**, enable it and choose **Xbox** before
+   starting the game. Restart Dusklight to change the style later.
+4. Start the game.
+
+Xbox source forks: [Dawnlight](https://github.com/999sian/dawnlight/tree/xbox-one-s-v2.0.3),
+[Roll and Sprint](https://github.com/999sian/Roll-and-Sprint/tree/xbox-one-s-v2.0.3),
+[Controller UI](https://github.com/999sian/TP-CM-Controller-UI/tree/xbox-one-s-v2.0.3).
+
+Dawnlight's optional boss-rush music file is absent. Both sprint mods together
+are untested. Mod updates require a new signed app package.
 
 ## Other mods
 
