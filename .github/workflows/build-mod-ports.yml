@@ -191,7 +191,9 @@ jobs:
               executable=([BitConverter]::ToUInt32($bytes, $offset + 36) -band 0x20000000) -ne 0}
           })
           $symbols = @($exports | ForEach-Object {
-            if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+([0-9A-F]{8})\s+(\S+)') {
+            if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+(?:[0-9A-F]{8}\s+)?(\S+)\s+\(forwarded to webgpu_dawn\.') {
+              $Matches[1]
+            } elseif ($_ -match '^\s+\d+\s+[0-9A-F]+\s+([0-9A-F]{8})\s+(\S+)') {
               $rva = [Convert]::ToUInt32($Matches[1], 16)
               $name = $Matches[2]
               $section = @($sections | Where-Object { $rva -ge $_.rva -and $rva -lt ($_.rva + $_.size) })
