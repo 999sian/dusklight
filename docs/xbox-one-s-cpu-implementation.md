@@ -58,10 +58,38 @@ experiments, rather than unvalidated default changes.
 No game/settings/save/ISO files were modified for CPU testing. The full texture
 pack remains enabled in internal D: storage as described in the progress doc.
 
+## Windows build and Xbox startup
+
+CI run [39694255721](https://github.com/999sian/dusklight/actions/runs/39694255721)
+passed for source `4c48761` and Aurora `cc1c53d`. Both the Linux interpolation
+job and Windows HUD/application/native-mod/package job succeeded. The signed
+package identity is `Dusklight_2.0.3.53_x64__5pxj2cgsb63vw`.
+
+Before deployment, archive CRC, exact package identity, embedded SYMGEN data,
+three bundled native DLLs and pinned shader seed hash were verified. Fresh
+backups of both original U: and active D: settings/save/mod files were taken
+after stopping the app. Installation completed in place without uninstalling;
+all backed-up hashes and the custom-folder descriptor were unchanged, and the
+original ISO remained 1,459,978,240 bytes.
+
+Remote launch survived checks at 5, 15, 30 and 60 seconds. The log confirms
+config from D:, 4,730 texture registrations, 4/4 active mods and no startup
+errors. The screenshot shows the menu, disc ready and shader compilation in
+progress. Its 60 FPS counter is menu evidence only. It also reports no device
+assigned to Port 1; controller assignment still needs checking before gameplay.
+The existing 41×64 BC thumbnail warning remains. Sampled working set ranged
+from about 565 to 1,009 MiB during startup; this is not peak gameplay memory or
+a controlled memory comparison. Both data-folder hashes remained unchanged
+after startup. The app was left running; no TV input/power commands were sent.
+
+Local evidence under `/home/sian/Downloads/dusklight-xbox-diagnostics`:
+`before-cpu-package53/`, `v53-cpu-startup.log`, `v53-cpu-startup.png` and
+`v53-cpu-startup-verification.json`. The downloaded package is under
+`/home/sian/Downloads/dusklight-uwp-39694255721`.
+
 ## Remaining acceptance
 
-Record the exact Windows build and package result after CI, then use the same
-save/route/settings for baseline versus this package. Separate cold compilation/
+Use the same save/route/settings for baseline versus this package. Separate cold compilation/
 streaming from warmed gameplay. Capture CPU execution, waits, GPU time where
 available, p95/p99 frame times and peak memory; compare FIFO batch one versus
 four if pacing regresses. Check animated materials, scene transitions, mod

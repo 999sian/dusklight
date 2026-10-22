@@ -3,7 +3,25 @@
 Updated 22 October 2026 (Europe/London). This is a snapshot; check GitHub and
 Device Portal again before continuing.
 
-## Latest: full pack enabled on internal D: storage
+## Latest: seven CPU changes installed and startup checked
+
+All seven approved CPU work-reduction changes are implemented, tested and
+pushed; details and remaining gameplay checks are in
+`xbox-one-s-cpu-implementation.md`. CI run 39694255721 passed for `4c48761`,
+including the complete Windows/UWP build. Package **2.0.3.53** was installed
+in place with fresh backups under local diagnostics `before-cpu-package53`.
+Both original U: and active D: settings/save/mod hashes, the custom-folder
+descriptor and original ISO size were preserved.
+
+The app stayed running through a 60-second remote startup check with D: config,
+4,730 texture registrations, 4/4 mods and no startup errors. The menu screenshot
+shows disc ready and shader compilation in progress, plus no device assigned
+to Port 1. No gameplay speedup or sustained 1080p60 has been measured. The
+existing BC thumbnail warning remains. Evidence: `v53-cpu-startup.log`,
+`v53-cpu-startup.png`, `v53-cpu-startup-verification.json`. The app is left
+running; no TV input/power commands were sent.
+
+## Full pack enabled on internal D: storage
 
 The complete TPDE+ selection transferred successfully via SMB: **4,788 files,
 7,764,942,214 bytes**, in 646 seconds. All remote names/sizes match the manifest;
@@ -46,7 +64,8 @@ The CPU scan is recorded in `xbox-one-s-1080p60-assessment.md`, with source
 references, candidate changes and safety/measurement checks. Warm-gameplay
 priorities are FIFO publication batching, matrix snapshot storage reuse and
 material capture allocation reduction. Shader/texture queue improvements mainly
-address loading periods. No functional optimization or measured speedup yet.
+address loading periods. These candidates are now implemented as described
+above; gameplay speedup remains unmeasured.
 
 ## Developer storage resize verification
 
