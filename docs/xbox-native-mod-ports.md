@@ -15,7 +15,8 @@ The experimental workflow builds them against the same host import library,
 includes their resources and licenses, and checks for four bundled native
 libraries (the three ports plus Luau). It permits the pinned mods' BTI/BMD
 artwork only in their resource folders. It still rejects disc images, saves,
-private keys, Cosmetics and Randomizer. No new public release is published.
+private keys, Cosmetics and Randomizer. The package is available as a separate
+[experimental download](https://github.com/999sian/dusklight/releases/tag/v2.0.3-xbox-mod-ports.1006); public release 2.0.3.54 is unchanged.
 Dawnlight's standalone updater remains unavailable, as in upstream 5.1.0;
 Xbox mod updates need a new signed app package.
 
@@ -30,7 +31,8 @@ setting were hash-checked unchanged during the update; the ISO size was also che
 
 ## Use on Xbox
 
-1. Install the experimental signed MSIX as an update. Do not uninstall Dusklight.
+1. Download the ZIP from the experimental release above, extract it and install
+   its signed MSIX through Device Portal as an update. Do not uninstall Dusklight.
 2. Open **Mods** before starting the game.
 3. Enable **Dawnlight** or **Roll and Sprint**. Leave the other disabled.
 4. For **TP Classic Modern Controller UI**, enable it and choose **Xbox** before starting the game. Restart Dusklight to change controller style later.
