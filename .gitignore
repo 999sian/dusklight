@@ -47,6 +47,21 @@ compile_commands.json
 
 # ISOs
 *.iso
+*.gcm
+*.rvz
+*.wbfs
+*.wia
+*.gcz
+*.ciso
+*.wad
+local-game/
+# Optional checkout with assets excluded from the public Xbox release
+mods/randomizer/
+
+# Local deployment credentials and signing keys
+*.pfx
+*.p12
+*.key
 
 *.ini
 *.controller

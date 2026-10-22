@@ -38,7 +38,7 @@ prelaunch-background {
     position: absolute;
     width: 100%;
     height: 100%;
-    decorator: image(../prelaunch-bg.png cover left center);
+    decorator: horizontal-gradient(#16151FFF #493B29FF);
     opacity: 0;
     transition: opacity 1s linear-in-out;
 }

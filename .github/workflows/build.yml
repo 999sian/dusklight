@@ -141,12 +141,12 @@ jobs:
             /p:GenerateAppxPackageOnBuild=false
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cmake --build build-uwp --config RelWithDebInfo --parallel 4 `
-            --target luau_runtime_package cosmetics_package randomizer_package
+            --target luau_runtime_package cosmetics_package
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $mods = Join-Path $env:GITHUB_WORKSPACE 'build/uwp-extra/mods'
           New-Item -ItemType Directory -Force $mods | Out-Null
           $bundles = @(Get-ChildItem build-uwp/bundled_mods -Filter *.dusk)
-          if ($bundles.Count -ne 3) { throw "Expected 3 bundled mods, found $($bundles.Count)" }
+          if ($bundles.Count -ne 2) { throw "Expected 2 bundled mods, found $($bundles.Count)" }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           foreach ($bundle in $bundles) {
             $stage = Join-Path $env:RUNNER_TEMP $bundle.BaseName
@@ -213,11 +213,20 @@ jobs:
             $names = $zip.Entries | ForEach-Object FullName
           } finally { $zip.Dispose() }
           foreach ($required in @('dusklight.exe', 'initial_pipeline_cache.db',
-              'mods/dev.twilitrealm.randomizer/lib/windows-amd64/mod.dll')) {
+              'res/licenses/Dusklight-CC0.txt', 'res/licenses/Font-notices.txt',
+              'mods/dev.twilitrealm.luau/lib/windows-amd64/mod.dll',
+              'mods/dev.twilitrealm.cosmetics/lib/windows-amd64/mod.dll')) {
             if ($names -notcontains $required) { throw "Package is missing $required" }
           }
-          if (@($names | Where-Object { $_ -like 'mods/*/lib/windows-amd64/mod.dll' }).Count -ne 3) {
-            throw 'Package does not contain all 3 bundled mod libraries'
+          if (@($names | Where-Object { $_ -like 'mods/*/lib/windows-amd64/mod.dll' }).Count -ne 2) {
+            throw 'Package does not contain both bundled mod libraries'
+          }
+          $forbidden = @($names | Where-Object {
+            $_ -match '(?i)\.(iso|gcm|rvz|wbfs|wia|gcz|ciso|wad|dol|rel|gci|raw|bti|bmd|brres|szs|arc|pfx|p12|key)$' -or
+            $_ -like 'mods/dev.twilitrealm.randomizer/*' -or $_ -eq 'res/prelaunch-bg.png'
+          })
+          if ($forbidden.Count) {
+            throw "Package contains excluded game/private resources: $($forbidden -join ', ')"
           }
 
       - name: Upload installable package

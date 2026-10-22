@@ -1,0 +1,42 @@
+Notices embedded in the exact bundled font files (name IDs 0 and 13).
+Full license texts are supplied alongside this file.
+
+AlegreyaSC-Bold.ttf
+Copyright 2011 The Alegreya Project Authors (https://github.com/huertatipografica/Alegreya)
+This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: http://scripts.sil.org/OFL
+
+AlegreyaSC-Regular.ttf
+Copyright 2011 The Alegreya Project Authors (https://github.com/huertatipografica/Alegreya)
+This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: http://scripts.sil.org/OFL
+
+FiraSans-Bold.ttf
+Digitized data copyright 2012-2016, The Mozilla Foundation and Telefonica S.A.
+Licensed under the Open Font License, version 1.1 or later
+
+FiraSans-Regular.ttf
+Digitized data copyright 2012-2016, The Mozilla Foundation and Telefonica S.A.
+Licensed under the Open Font License, version 1.1 or later
+
+FiraSansCondensed-Bold.ttf
+Digitized data copyright 2012-2016, The Mozilla Foundation and Telefonica S.A.
+Licensed under the Open Font License, version 1.1 or later
+
+FiraSansCondensed-Regular.ttf
+Digitized data copyright 2012-2016, The Mozilla Foundation and Telefonica S.A.
+Licensed under the Open Font License, version 1.1 or later
+
+Inter-Bold.ttf
+Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
+This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+
+Inter-Regular.ttf
+Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
+This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: https://openfontlicense.org
+
+MaterialSymbolsRounded-Regular.ttf
+Copyright 2026 Google LLC.  All Rights Reserved.
+
+NotoMono-Regular.ttf
+Copyright 2007 Google Inc. All Rights Reserved.
+This Font Software is licensed under the SIL Open Font License, Version 1.1. This Font Software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the SIL Open Font License for the specific language, permissions and limitations governing your use of this Font Software.
+
