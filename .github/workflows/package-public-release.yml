@@ -1,0 +1,97 @@
+name: Package audited Xbox release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Successful build run for source 046149e (package 2.0.3.54)
+        required: true
+        default: '39706366738'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: ${{ inputs.source_run }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+      - name: Download verified source build
+        run: |
+          if ($env:SOURCE_RUN -notmatch '^\d+$') { throw 'Invalid source run' }
+          $run = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SOURCE_RUN" | ConvertFrom-Json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ($run.conclusion -ne 'success' -or
+              $run.head_sha -ne '046149e09884b44989b64f3b1ee0fd96c8ffbc66' -or
+              $run.path -ne '.github/workflows/build.yml') { throw 'Unexpected source build' }
+          gh run download $env:SOURCE_RUN --repo $env:GITHUB_REPOSITORY `
+            -n dusklight-uwp-experimental-x64 -D input
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Exclude unlicensed mod and sign public package
+        run: |
+          $packages = @(Get-ChildItem input -Recurse -Filter *.msix)
+          if ($packages.Count -ne 1) { throw 'Expected exactly one MSIX' }
+          $package = $packages[0]
+          $layout = Join-Path $env:RUNNER_TEMP 'public-layout'
+          makeappx unpack /p $package.FullName /d $layout /o
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          [xml]$manifest = Get-Content (Join-Path $layout 'AppxManifest.xml')
+          $id = $manifest.Package.Identity
+          if ($id.Name -ne 'Dusklight' -or $id.Publisher -ne 'CN=odolwa' -or
+              $id.Version -ne '2.0.3.54' -or $id.ProcessorArchitecture -ne 'x64') {
+            throw 'Unexpected package identity'
+          }
+          $exeHash = (Get-FileHash (Join-Path $layout 'dusklight.exe')).Hash
+          $cosmetics = Join-Path $layout 'mods/dev.twilitrealm.cosmetics'
+          if (!(Test-Path (Join-Path $cosmetics 'lib/windows-amd64/mod.dll'))) {
+            throw 'Expected source Cosmetics library'
+          }
+          Remove-Item $cosmetics -Recurse -Force
+          foreach ($stale in @('AppxSignature.p7x', 'AppxBlockMap.xml', 'AppxMetadata/CodeIntegrity.cat')) {
+            Remove-Item (Join-Path $layout $stale) -Force -ErrorAction SilentlyContinue
+          }
+          $files = @(Get-ChildItem $layout -File -Recurse)
+          $bad = @($files | Where-Object {
+            $_.Name -match '(?i)\.(iso|gcm|rvz|wbfs|wia|gcz|ciso|wad|dol|rel|gci|raw|bti|bmd|brres|szs|arc|pfx|p12|key)$' -or
+            $_.FullName -match 'dev\.twilitrealm\.(randomizer|cosmetics)' -or $_.Name -eq 'prelaunch-bg.png'
+          })
+          if ($bad.Count) { throw 'Excluded game/private/mod content remains' }
+          $mods = @(Get-ChildItem (Join-Path $layout 'mods') -Filter mod.dll -File -Recurse)
+          if ($mods.Count -ne 1 -or $mods[0].FullName -notmatch 'dev\.twilitrealm\.luau') {
+            throw 'Public package must contain Luau only'
+          }
+          if (!(Test-Path (Join-Path $layout 'res/licenses/funchook-1.1.3.txt'))) { throw 'Missing notices' }
+          if ((Get-FileHash (Join-Path $layout 'dusklight.exe')).Hash -ne $exeHash) { throw 'Game changed' }
+          $output = Join-Path $env:GITHUB_WORKSPACE 'public-package'
+          New-Item -ItemType Directory $output | Out-Null
+          $msix = Join-Path $output 'Dusklight_2.0.3.54_x64.msix'
+          makeappx pack /d $layout /p $msix /o
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=odolwa' `
+            -KeyUsage DigitalSignature -FriendlyName 'Dusklight public development' `
+            -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3','2.5.29.19={text}')
+          Export-Certificate -Cert $cert -FilePath (Join-Path $output 'Dusklight_2.0.3.54_x64.cer') | Out-Null
+          signtool sign /fd SHA256 /sha1 $cert.Thumbprint $msix
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item (Join-Path $package.DirectoryName 'Dependencies') $output -Recurse
+          @{source_run=$env:SOURCE_RUN; source_commit='046149e09884b44989b64f3b1ee0fd96c8ffbc66';
+            packaging_commit=$env:GITHUB_SHA; game_exe_sha256=$exeHash;
+            msix_sha256=(Get-FileHash $msix).Hash; excluded_mod='dev.twilitrealm.cosmetics'} |
+            ConvertTo-Json | Set-Content (Join-Path $output 'packaging-provenance.json')
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dusklight-public-x64
+          path: public-package/**
+          if-no-files-found: error

@@ -4,6 +4,3 @@
 [submodule "extern/borealis"]
 	path = extern/borealis
 	url = https://github.com/999sian/borealis.git
-[submodule "mods/cosmetics"]
-	path = mods/cosmetics
-	url = https://github.com/TwilitRealm/dusklight-cosmetics

@@ -57,6 +57,7 @@ compile_commands.json
 local-game/
 # Optional checkout with assets excluded from the public Xbox release
 mods/randomizer/
+mods/cosmetics/
 
 # Local deployment credentials and signing keys
 *.pfx

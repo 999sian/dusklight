@@ -19,6 +19,9 @@ license; describing the distribution as entirely copyright-free would be wrong.
   a CSS gradient. The randomizer submodule reference/build integration is
   removed from this release's source checkout, and the randomizer is no longer
   staged into the MSIX. Its existing local checkout is retained outside Git.
+- The separate Cosmetics repository has no license file or declared license.
+  It is also excluded from the source checkout and public package. Its existing
+  local checkout and the user's installed package are retained.
 - Standard project branding remains inherited upstream artwork. This audit
   does not certify ownership of character imagery or trademarks. Dependency
   license texts do not grant rights to Nintendo game content.

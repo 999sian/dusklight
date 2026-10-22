@@ -44,11 +44,13 @@ space available to each Developer Mode folder.
   reuse, shader-queue tracking, texture-request deduplication, texture-publication
   sorting and guarded HUD updates.
 - An upstream initial pipeline list; shaders still compile for the console.
-- Bundled UWP builds of **Cosmetics** and **Luau Support**.
+- A bundled UWP build of **Luau Support**.
 - Third-party license notices in `res/licenses` inside the package.
 
 The public package excludes the upstream randomizer's bundled texture assets
 and the static gameplay-screenshot background pending asset-rights review.
+Cosmetics is excluded because its separate repository has no license or
+redistribution terms. These optional submodules are excluded from the release source.
 Dawnlight, Twilit Essentials, Dark Link and TPDE+ are **not bundled**. The
 built-in mod browser does not guarantee Xbox compatibility: desktop native
 DLLs generally need a UWP rebuild and inclusion in a signed package. Native
