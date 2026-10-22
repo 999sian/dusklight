@@ -82,7 +82,7 @@ and compiled shader caches can remain in the original preference folder.
 
 ## Mods: installation and compatibility
 
-**[Step-by-step mod guide](docs/xbox-one-s-mod-compatibility.md)**
+**[Instructions for each mod, including Randomizer](docs/xbox-one-s-mod-compatibility.md)**
 
 1. Close Dusklight and back up your saves.
 2. In Device Portal, open `LocalState\TwilitRealm\Dusklight` in Dusklight's
