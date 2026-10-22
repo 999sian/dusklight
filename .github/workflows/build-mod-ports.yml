@@ -179,10 +179,27 @@ jobs:
           }
           $exports = @(& dumpbin /nologo /exports $exe)
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          # Preserve DATA exports so a missing dllimport annotation cannot link to a function thunk.
+          $bytes = [IO.File]::ReadAllBytes($exe)
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+          $sectionCount = [BitConverter]::ToUInt16($bytes, $peOffset + 6)
+          $sectionOffset = $peOffset + 24 + [BitConverter]::ToUInt16($bytes, $peOffset + 20)
+          $sections = @(for ($i = 0; $i -lt $sectionCount; $i++) {
+            $offset = $sectionOffset + 40 * $i
+            @{rva=[BitConverter]::ToUInt32($bytes, $offset + 12);
+              size=[Math]::Max([BitConverter]::ToUInt32($bytes, $offset + 8), [BitConverter]::ToUInt32($bytes, $offset + 16));
+              executable=([BitConverter]::ToUInt32($bytes, $offset + 36) -band 0x20000000) -ne 0}
+          })
           $symbols = @($exports | ForEach-Object {
-            if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+(?:[0-9A-F]{8}\s+)?(\S+)') { $Matches[1] }
+            if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+([0-9A-F]{8})\s+(\S+)') {
+              $rva = [Convert]::ToUInt32($Matches[1], 16)
+              $name = $Matches[2]
+              $section = @($sections | Where-Object { $rva -ge $_.rva -and $rva -lt ($_.rva + $_.size) })
+              if ($section.Count -ne 1) { throw "Unmapped export $name" }
+              if (!$section[0].executable) { "$name DATA" } else { $name }
+            }
           } | Sort-Object -Unique)
-          if ($symbols.Count -lt 10000 -or $symbols.Count -gt 60000) { throw "Unexpected export count $($symbols.Count)" }
+          if ($symbols.Count -ne 16384) { throw "Unexpected export count $($symbols.Count)" }
           $definition = Join-Path $env:RUNNER_TEMP 'dusklight-base.def'
           @('LIBRARY dusklight.exe', 'EXPORTS') + $symbols | Set-Content $definition -Encoding ascii
           New-Item -ItemType Directory -Force build-uwp/RelWithDebInfo | Out-Null
