@@ -60,6 +60,8 @@ is source code; copying its `.dusk` or DLL into `mods/` will not work.
 These menu steps were checked against the source, not a completed Xbox
 playthrough. Public packaging is pending bundled texture rights review.
 
+[Build Randomizer for Xbox](xbox-one-s-randomizer-build.md)
+
 ## Cosmetics
 
 **Not included in the public release** pending redistribution terms.

@@ -110,6 +110,8 @@ do not uninstall.**
 
 ### Which mods did we change?
 
+[Randomizer Xbox build instructions](docs/xbox-one-s-randomizer-build.md).
+
 Only Randomizer's mod source was changed: float byte conversion, an MSVC build
 fix and a regression test. Its Xbox fork is linked above. Luau's source,
 Cosmetics, Dark Link and TPDE+ content were unchanged; compatibility work is in
