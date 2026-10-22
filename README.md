@@ -30,12 +30,106 @@ Device Portal installation.
 5. Supply your own supported disc image, select it in Dusklight and assign
    your controller to Port 1 in Settings.
 
-For large personal texture packs, allocate sufficient Developer Mode storage
-before transferring files. Dusklight's **Change Data Folder** setting can use
-an internal development-files folder such as
-`D:\DevelopmentFiles\DusklightData`. Keep backups before changing folders or
-resizing storage. Your usual retail-mode free space does not establish the
-space available to each Developer Mode folder.
+### First launch: disc image and controller
+
+1. Launch once to create the app's data folders, then stop Dusklight before
+   transferring files or editing settings.
+2. In Device Portal's file explorer, select Dusklight's app data. The default
+   data folder is `LocalState\TwilitRealm\Dusklight`. Create a `Games` folder
+   there and upload your own supported disc image. Do not put it inside the
+   installed app package, which is read-only.
+3. Launch Dusklight and choose **Select Disc Image**. If the Xbox file picker
+   cannot reach the image, stop the app, back up `config.json` in the active
+   data folder, then edit its existing flat `backend.isoPath` key to the full
+   console path reported by Device Portal. For example, an image transferred
+   to the development-files share could use:
+
+   ```json
+   "backend.isoPath": "D:\\DevelopmentFiles\\DusklightData\\Games\\My Disc.iso"
+   ```
+
+   This is one entry to merge into the existing JSON object; do not replace
+   the entire configuration with this example. Keep its other keys and valid
+   JSON punctuation. Restart after changing the disc path.
+4. In Settings, assign your Xbox controller to **Port 1**, then start the game.
+   Allow time for initial shader compilation. Keep the app's cache for later
+   launches; the bundled pipeline list does not eliminate compilation.
+
+### Internal storage and large transfers
+
+Developer Mode has its own storage allocation. Retail-mode free space does
+not establish the space available to each Developer Mode folder. Back up app
+settings and saves before resizing that allocation in Dev Home.
+
+For large packs, use the Xbox's development-files SMB share where available:
+`smb://<xbox-ip>/DevelopmentFiles` from a compatible file manager, or
+`\\<xbox-ip>\DevelopmentFiles` on Windows. Use the credentials configured for
+remote access on your own Xbox. Create a folder such as
+`D:\DevelopmentFiles\DusklightData` and leave room for extraction and caches.
+This share has worked for a 7.76 GB texture transfer; large browser uploads
+previously failed when the destination ran out of space.
+
+Dusklight's **Settings → Data Folder → Change Data Folder** can select a custom
+folder when the platform's folder picker is available. Files placed on D: do
+not automatically become the active data folder. If the Xbox picker is
+unavailable, retain the working default folder; manual relocation requires a
+backup and copying the existing settings/saves/mods before changing the data
+location. Keep the original files until the new location is verified. Logs
+and compiled shader caches can remain in the original preference folder.
+
+## Mods: installation and compatibility
+
+The built-in online browser can list desktop mods that cannot run on Xbox.
+A `.dusk` file is a package format, not an Xbox compatibility guarantee.
+**The browser's reported installation-permission error is still unresolved.**
+Manual placement has activated asset/Luau packages, but does not fix that error.
+
+For an asset or Luau mod obtained from its author:
+
+1. Back up saves and settings, then stop Dusklight.
+2. Put the intact `.dusk` file in `mods/` inside the **active data folder**
+   (by default `LocalState\TwilitRealm\Dusklight\mods`). Do not unpack it into
+   the application or replace the bundled DLLs.
+3. Restart, check the Mods screen and enable the mod if needed. Follow the
+   author's dependency/version instructions and install one mod at a time.
+4. If startup fails, stop the app and move the new package out of `mods/`,
+   keeping a backup. Do not uninstall the app or delete saves to recover.
+
+For loose texture packs, follow the author's assembly instructions, copy the
+selected textures beneath `texture_replacements/<pack-name>/` in the active
+folder and enable **Enable Texture Replacements** in graphics settings. This
+is separate from installing a `.dusk` mod. Desktop ReShade files do not provide
+an Xbox shader port. Large packs may exceed available storage or memory.
+
+| Mod / type | Xbox status | Included in public release? |
+| --- | --- | --- |
+| **Luau Support 1.0** | Bundled UWP runtime executed a script and update callback in a previous Xbox test; individual mods still need testing. | Yes |
+| **Play as Dark Link 1.0.0**, by LoadingError | Original asset/Luau package activated after manual transfer. In-game appearance unverified; browser permission error unresolved. This is the appearance mod, not the native Dark Link boss mod. | No |
+| **TP Definitive Edition+ 2.1 texture archives** | Original DDS/PNG data transferred to internal storage; startup registered 4,730 textures. Full visual, memory and FPS checks pending. | No |
+| **Cosmetics** | Initialized in a previous private build; features not fully tested. Excluded because its repository has no license or redistribution terms. | No |
+| **Randomizer** | Xbox source fixes exist and initialization passed in a previous private build. Bundled texture redistribution rights remain unresolved; gameplay unverified. | No |
+| **Twilit Essentials 2.8.4** | Current source was not available in our investigation; released desktop DLL has unsupported dependencies/imports. No working Xbox port. | No |
+| **Dawnlight 5.1.0** | Public source exists, but needs a UWP port and matching game exports. Not installed or ported. | No |
+| **Other native DLL mods** | Downloaded DLLs in app data cannot load through the current UWP loader. They need compatible source, a UWP rebuild and signed bundling. Windows x64 alone is insufficient. | No |
+
+HTTP transport is implemented; WebSocket support remains unavailable. Neither
+that transport nor a successful startup proves every mod feature works. See
+[mod compatibility and test history](docs/xbox-one-s-mod-compatibility.md) for
+the evidence and remaining limits.
+
+### Which mods did we change?
+
+| Project | Our changes and source | Distribution status |
+| --- | --- | --- |
+| **Randomizer** | [Existing Xbox fork](https://github.com/999sian/dusklight-randomizer/tree/xbox-one-s-v2.0.3), commit [`6bd8000`](https://github.com/999sian/dusklight-randomizer/commit/6bd800033cf39e37da620c5e4ce29ddd94df10d6): preserve floating-point bits during endian conversion, an MSVC codecvt build fix and an endian regression test. | Excluded here pending rights review. The fork link is source provenance, not a cleared downloadable Xbox mod. |
+| **Luau Support** | Its mod source is unchanged; it lives in this Dusklight tree under [`mods/luau_runtime`](mods/luau_runtime). Xbox compatibility changes are in the host, SDK and build/packaging. | Bundled; no separate mod fork needed. |
+| **Cosmetics** | Upstream mod source unchanged; previous private build used host/SDK compatibility changes. | Excluded; no new fork published without redistribution terms. |
+| **Dark Link / TPDE+** | Author packages/content unchanged. We transferred and configured them for personal testing. | Not republished or forked; obtain from their authors. |
+| **Twilit Essentials / Dawnlight** | No Xbox mod-source changes or completed port. | No Xbox fork/release claimed. |
+
+The supporting [Aurora](https://github.com/999sian/aurora/tree/xbox-one-s-v2.0.3)
+and [Borealis](https://github.com/999sian/borealis/tree/xbox-one-s-v2.0.3)
+forks contain Xbox engine/platform work. They are libraries, not game mods.
 
 ## What is included
 

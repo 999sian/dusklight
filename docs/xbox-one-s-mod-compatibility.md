@@ -1,5 +1,17 @@
 # Xbox One S mod compatibility
 
+## Public release 2.0.3.54
+
+Only Luau Support is bundled. Cosmetics and Randomizer initialization below
+refers to earlier private test builds: both are excluded from this public
+package pending redistribution clearance. Randomizer's source changes already
+exist in [our Xbox fork](https://github.com/999sian/dusklight-randomizer/tree/xbox-one-s-v2.0.3)
+at `6bd8000`; the other tested mods' source/content was not modified.
+See the [README](../README.md#mods-installation-and-compatibility) for installation,
+mod status and fork provenance. Browser installation permissions remain unresolved.
+
+## Earlier private-build test history
+
 The target is the existing online browser, downloads and broad mod support.
 Compatibility is still experimental until checked on the console.
 
