@@ -82,59 +82,39 @@ and compiled shader caches can remain in the original preference folder.
 
 ## Mods: installation and compatibility
 
-The built-in online browser can list desktop mods that cannot run on Xbox.
-A `.dusk` file is a package format, not an Xbox compatibility guarantee.
-**The browser's reported installation-permission error is still unresolved.**
-Manual placement has activated asset/Luau packages, but does not fix that error.
+**[Step-by-step mod guide](docs/xbox-one-s-mod-compatibility.md)**
 
-For per-mod steps, see **[How to use mods on Xbox](docs/xbox-one-s-mod-compatibility.md#how-to-use-mods-on-xbox)**: bundled Luau, manual Dark Link installation, loose texture packs and the requirements for a Randomizer package.
+1. Close Dusklight and back up your saves.
+2. In Device Portal, open `LocalState\TwilitRealm\Dusklight` in Dusklight's
+   app data. Use your custom data folder instead if you set one.
+3. Copy asset/Luau `.dusk` files into `mods/`. Do not unzip them.
+4. Launch Dusklight → **Mods** → enable the mod and its dependencies.
 
-For an asset or Luau mod obtained from its author:
+For loose texture packs, extract the selected textures into
+`texture_replacements/<pack-name>/`, then enable **Enable Texture Replacements**
+in graphics settings.
 
-1. Back up saves and settings, then stop Dusklight.
-2. Put the intact `.dusk` file in `mods/` inside the **active data folder**
-   (by default `LocalState\TwilitRealm\Dusklight\mods`). Do not unpack it into
-   the application or replace the bundled DLLs.
-3. Restart, check the Mods screen and enable the mod if needed. Follow the
-   author's dependency/version instructions and install one mod at a time.
-4. If startup fails, stop the app and move the new package out of `mods/`,
-   keeping a backup. Do not uninstall the app or delete saves to recover.
+| Mod | Xbox status |
+| --- | --- |
+| [Luau Support](mods/luau_runtime) | Included. Enable in **Mods**; no download needed. |
+| Play as Dark Link 1.0.0 — LoadingError | Needs Luau. Manual installation activated it; appearance unverified. |
+| [TPDE+](https://gamebanana.com/mods/714018) | Startup loaded textures; gameplay/performance checks pending. Tested selection: 7.76 GB. |
+| [Randomizer — our Xbox fork](https://github.com/999sian/dusklight-randomizer/tree/xbox-one-s-v2.0.3) | Not installable in this public release. Needs signed app bundling; texture rights review pending. |
+| Cosmetics | Excluded pending redistribution terms. |
+| Twilit Essentials / Dawnlight | No working Xbox port here yet. |
 
-For loose texture packs, follow the author's assembly instructions, copy the
-selected textures beneath `texture_replacements/<pack-name>/` in the active
-folder and enable **Enable Texture Replacements** in graphics settings. This
-is separate from installing a `.dusk` mod. Desktop ReShade files do not provide
-an Xbox shader port. Large packs may exceed available storage or memory.
-
-| Mod / type | Xbox status | Included in public release? |
-| --- | --- | --- |
-| **[Luau Support 1.0](https://github.com/999sian/dusklight/tree/xbox-one-s-uwp-v2.0.3/mods/luau_runtime)** | Bundled UWP runtime executed a script and update callback in a previous Xbox test; individual mods still need testing. | Yes |
-| **Play as Dark Link 1.0.0**, by LoadingError | Original asset/Luau package activated after manual transfer. In-game appearance unverified; browser permission error unresolved. This is the appearance mod, not the native Dark Link boss mod. | No |
-| **TP Definitive Edition+ 2.1 texture archives** | Original DDS/PNG data transferred to internal storage; startup registered 4,730 textures. Full visual, memory and FPS checks pending. | No |
-| **Cosmetics** | Initialized in a previous private build; features not fully tested. Excluded because its repository has no license or redistribution terms. | No |
-| **[Randomizer — Xbox fork](https://github.com/999sian/dusklight-randomizer/tree/xbox-one-s-v2.0.3)** | Xbox source fixes exist and initialization passed in a previous private build. Bundled texture redistribution rights remain unresolved; gameplay unverified. | No |
-| **Twilit Essentials 2.8.4** | Current source was not available in our investigation; released desktop DLL has unsupported dependencies/imports. No working Xbox port. | No |
-| **Dawnlight 5.1.0** | Public source exists, but needs a UWP port and matching game exports. Not installed or ported. | No |
-| **Other native DLL mods** | Downloaded DLLs in app data cannot load through the current UWP loader. They need compatible source, a UWP rebuild and signed bundling. Windows x64 alone is insufficient. | No |
-
-HTTP transport is implemented; WebSocket support remains unavailable. Neither
-that transport nor a successful startup proves every mod feature works. See
-[mod compatibility and test history](docs/xbox-one-s-mod-compatibility.md) for
-the evidence and remaining limits.
+The browser's permission error is unresolved. Use manual transfer for asset/Luau
+mods. Downloaded native DLL mods cannot load from app data.
+If a mod crashes, close the app and move the new mod out. **Keep your saves;
+do not uninstall.**
 
 ### Which mods did we change?
 
-| Project | Our changes and source | Distribution status |
-| --- | --- | --- |
-| **Randomizer** | [Existing Xbox fork](https://github.com/999sian/dusklight-randomizer/tree/xbox-one-s-v2.0.3), commit [`6bd8000`](https://github.com/999sian/dusklight-randomizer/commit/6bd800033cf39e37da620c5e4ce29ddd94df10d6): preserve floating-point bits during endian conversion, an MSVC codecvt build fix and an endian regression test. | Excluded here pending rights review. The fork link is source provenance, not a cleared downloadable Xbox mod. |
-| **Luau Support** | Its mod source is unchanged; it lives in this Dusklight tree under [`mods/luau_runtime`](mods/luau_runtime). Xbox compatibility changes are in the host, SDK and build/packaging. | Bundled; no separate mod fork needed. |
-| **Cosmetics** | Upstream mod source unchanged; previous private build used host/SDK compatibility changes. | Excluded; no new fork published without redistribution terms. |
-| **Dark Link / TPDE+** | Author packages/content unchanged. We transferred and configured them for personal testing. | Not republished or forked; obtain from their authors. |
-| **Twilit Essentials / Dawnlight** | No Xbox mod-source changes or completed port. | No Xbox fork/release claimed. |
-
-The supporting [Aurora](https://github.com/999sian/aurora/tree/xbox-one-s-v2.0.3)
-and [Borealis](https://github.com/999sian/borealis/tree/xbox-one-s-v2.0.3)
-forks contain Xbox engine/platform work. They are libraries, not game mods.
+Only Randomizer's mod source was changed: float byte conversion, an MSVC build
+fix and a regression test. Its Xbox fork is linked above. Luau's source,
+Cosmetics, Dark Link and TPDE+ content were unchanged; compatibility work is in
+the host/SDK and our [Aurora](https://github.com/999sian/aurora/tree/xbox-one-s-v2.0.3)
+and [Borealis](https://github.com/999sian/borealis/tree/xbox-one-s-v2.0.3) library forks.
 
 ## What is included
 
